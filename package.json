@@ -1,0 +1,23 @@
+{
+  "name": "blaz",
+  "version": "1.0.0",
+  "description": "CLI for Blaz Smart Contract Fuzzing Service",
+  "main": "cli.js",
+  "bin": {
+    "blaz": "./cli.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "glob": "^10.3.10",
+    "memorystream": "^0.3.1",
+    "solc": "^0.8.21",
+    "solc-typed-ast": "^17.0.0",
+    "table": "^6.8.1",
+    "uuid": "^9.0.1",
+    "yargs": "^17.7.2"
+  }
+}
