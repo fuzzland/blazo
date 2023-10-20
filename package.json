@@ -1,10 +1,10 @@
 {
-  "name": "blaz",
-  "version": "1.0.0",
+  "name": "blazo",
+  "version": "1.0.1",
   "description": "CLI for Blaz Smart Contract Fuzzing Service",
   "main": "cli.js",
   "bin": {
-    "blaz": "./cli.js"
+    "blazo": "./cli.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
