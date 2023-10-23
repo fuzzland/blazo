@@ -132,7 +132,7 @@ async function work_on_json(compiler_version, compiler_json, contract_name) {
         fs.writeFileSync(currentFile, JSON.stringify(compiler_json));
 
         starting = process.hrtime();
-        exec(`node ./compiler.js ${compiler_version} ${currentFile} --stack-size=65500`, async (err, stdout, stderr) => {
+        exec(`node ${__dirname}/compiler.js ${compiler_version} ${currentFile} --stack-size=65500`, async (err, stdout, stderr) => {
             if (err) {
                 console.log("Error loading solc", stderr);
                 resolve({ success: false, err: stderr })
