@@ -138,16 +138,10 @@ function visualize(results) {
 
 async function build_with_autodetect(project, projectType, compiler_version, daemon, autoStart) {
     console.log("Starting anvil...");
-    exec('anvil', (error, stdout, stderr) => {
-        if (error) {
-            console.error(`error: ${error.message}`);
-            return;
-        }
-        if (stderr) {
-            console.error(`stderr: ${stderr}`);
-            return;
-        }
-        console.log(`stdout: ${stdout}`);
+    const anvil = exec('anvil');
+
+    process.on('SIGINT', () => {
+        anvil.kill();
     });
 
     if (!projectType) {
@@ -159,11 +153,10 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
         results = [results];
     }
 
-    let offchainConfig = {};
-
-    for (const result of results) {
-        Object.assign({}, offchainConfig, result.abi);
-    }
+    let offchainConfig = results.reduce((acc, item) => {
+        const deepClonedItem = JSON.parse(JSON.stringify(item.abi));
+        return { ...acc, ...deepClonedItem };
+    }, {});
 
     for (const fileName in offchainConfig) {
         for (const contractName in offchainConfig[fileName]) {
@@ -202,7 +195,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
     console.log("Results written to results.json");
 
     if (autoStart) {
-        const command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -i -t "a"`;
+        const command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -i -t "a" --work-dir ./workdir`;
         console.log(`Starting ityfuzz with command: ${command}`);
         exec(command, (error, stdout, stderr) => {
             if (error) {
@@ -220,6 +213,8 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
     if (daemon) {
         await new Promise(() => { });
     }
+
+    anvil.kill();
 }
 
 const argv = yargs(hideBin(process.argv))
