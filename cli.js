@@ -7,6 +7,7 @@ const { table } = require('table');
 const { exec } = require('child_process');
 const { randomAddress } = require('./utils');
 const axios = require('axios');
+const compare = require('hamming-distance');
 
 async function deployContract(bytecode, port) {
     const deployData = JSON.stringify({
@@ -85,24 +86,54 @@ async function deploy(data, offchainConfig) {
         const contracts = data[i].bytecode;
         for (const fileName in contracts) {
             for (const contractName in contracts[fileName]) {
-                const bytecode = contracts[fileName][contractName];
+                let bytecode = contracts[fileName][contractName];
+                if (bytecode.startsWith("0x")) {
+                    bytecode = bytecode.slice(2);
+                }
+
+                let minDistance = Infinity;
+                let closestBytecodeAddress = null;
+
                 for (const bytecodeAddress of bytecodeToAddress) {
-                    if (bytecodeAddress.code.startsWith("0x")) {
-                        bytecodeAddress.code = bytecodeAddress.code.slice(2);
-                    }
-                    if (bytecode.startsWith("0x")) {
-                        bytecode = bytecode.slice(2);
+                    let code = bytecodeAddress.code;
+                    if (code.startsWith("0x")) {
+                        code = code.slice(2);
                     }
 
-                    if (bytecodeAddress.code.includes(bytecode) || bytecode.includes(bytecodeAddress.code)) {
-                        if (!data[i].hasOwnProperty("address")) {
-                            data[i]["address"] = {};
+                    const lengthDifference = Math.abs(bytecode.length - code.length);
+                    const maxLength = Math.max(bytecode.length, code.length);
+                    if (lengthDifference / maxLength <= 0.10) {
+                        const bytecodeBuffer = Buffer.from(bytecode, 'hex');
+                        const codeBuffer = Buffer.from(code, 'hex');
+
+                        const targetLength = Math.max(bytecodeBuffer.length, codeBuffer.length);
+
+                        let paddedBytecodeBuffer = bytecodeBuffer;
+                        let paddedCodeBuffer = codeBuffer;
+
+                        if (bytecodeBuffer.length < targetLength) {
+                            paddedBytecodeBuffer = Buffer.concat([bytecodeBuffer, Buffer.alloc(targetLength - bytecodeBuffer.length)]);
                         }
-                        if (!data[i]["address"].hasOwnProperty(fileName)) {
-                            data[i]["address"][fileName] = {};
+                        if (codeBuffer.length < targetLength) {
+                            paddedCodeBuffer = Buffer.concat([codeBuffer, Buffer.alloc(targetLength - codeBuffer.length)]);
                         }
-                        data[i]["address"][fileName][contractName] = bytecodeAddress.address;
+
+                        const distance = compare(paddedBytecodeBuffer, paddedCodeBuffer);
+                        if (distance !== null && distance < minDistance) {
+                            minDistance = distance;
+                            closestBytecodeAddress = bytecodeAddress;
+                        }
                     }
+                }
+
+                if (closestBytecodeAddress) {
+                    if (!data[i].hasOwnProperty("address")) {
+                        data[i]["address"] = {};
+                    }
+                    if (!data[i]["address"].hasOwnProperty(fileName)) {
+                        data[i]["address"][fileName] = {};
+                    }
+                    data[i]["address"][fileName][contractName] = closestBytecodeAddress.address;
                 }
             }
         }
