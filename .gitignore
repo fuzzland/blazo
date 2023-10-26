@@ -3,3 +3,5 @@ node_modules/
 .tmp/
 dist/
 results.json
+work_dir/
+workdir/
