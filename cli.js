@@ -4,7 +4,7 @@ const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const fs = require('fs');
 const { table } = require('table');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const { randomAddress } = require('./utils');
 const { deploy } = require('./utils');
 
@@ -34,7 +34,7 @@ function visualize(results) {
     console.log(table(data))
 }
 
-async function build_with_autodetect(project, projectType, compiler_version, daemon, autoStart, setupFile) {
+async function build_with_autodetect(project, projectType, compiler_version, daemon, autoStart, setupFile, isPrint) {
 
     if (!projectType) {
         projectType = await auto_detect(project);
@@ -105,17 +105,44 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
             command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -i -t "a" --work-dir ./workdir`;
         }
         console.log(`Starting ityfuzz with command: ${command}`);
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`error: ${error.message}`);
-                return;
-            }
-            if (stderr) {
-                console.error(`stderr: ${stderr}`);
-                return;
-            }
-            console.log(`stdout: ${stdout}`);
-        });
+
+        // maxBuffer: 100MB
+        const options = { maxBuffer:  1024 * 1024 * 100 };
+        if (isPrint) {
+            const [cmd, ...args] = command.split(' ');
+            const childProcess = spawn(cmd, args, options);
+
+            childProcess.stdout.on('data', (data) => {
+                console.log(`stdout: ${data}`);
+            });
+
+            childProcess.stderr.on('data', (data) => {
+                console.error(`stderr: ${data}`);
+            });
+
+            childProcess.on('close', (code) => {
+                console.log(`Child process exited with code ${code}`);
+                process.exit();
+            });
+        } else {
+            const childProcess = exec(command, options, (error, stdout, stderr) => {
+                if (error) {
+                    console.error(`error: ${error.message}`);
+                    process.exit();
+                    return;
+                }
+                if (stderr) {
+                    console.error(`stderr: ${stderr}`);
+                    return;
+                }
+                console.log(`stdout: ${stdout}`);
+            });
+
+            process.on('SIGINT', () => {
+                console.log('Received SIGINT. Terminating child process.');
+                childProcess.kill('SIGINT');
+            });
+        }
     }
 
     if (daemon) {
@@ -124,6 +151,9 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
 
     if (!setupFile) {
         anvil.kill();
+    }
+    if (!autoStart&&!daemon){
+        process.exit();
     }
 }
 
@@ -139,7 +169,7 @@ const argv = yargs(hideBin(process.argv))
         },
         async (argv) => {
             if (argv.project) {
-                await build_with_autodetect(argv.project, argv.projectType, argv.compilerVersion, argv.daemon, argv.autoStart, argv.setupFile);
+                await build_with_autodetect(argv.project, argv.projectType, argv.compilerVersion, argv.daemon, argv.autoStart, argv.setupFile, argv.print);
             }
         }
     )
@@ -167,6 +197,12 @@ const argv = yargs(hideBin(process.argv))
         alias: 'f',
         type: 'string',
         description: 'Specify the setup file to use',
+    })
+    .option('printing', {
+        alias: 'p',
+        type: 'boolean',
+        description: 'print the output in real-time if true',
+        default: false,
     })
     .demandOption(['project'], 'Please provide the project argument to proceed')
     .help()
