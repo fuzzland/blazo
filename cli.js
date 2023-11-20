@@ -100,9 +100,9 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
     if (autoStart) {
         let command = "";
         if (setupFile) {
-            command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./ityfuzz --setup-file ${setupFile}`;
+            command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./.ityfuzz --setup-file ${setupFile}`;
         } else {
-            command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -i -t "a" --work-dir ./ityfuzz`;
+            command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -i -t "a" --work-dir ./.ityfuzz`;
         }
         console.log(`Starting ityfuzz with command: ${command}`);
 
@@ -201,7 +201,7 @@ const argv = yargs(hideBin(process.argv))
     .option('printing', {
         alias: 'p',
         type: 'boolean',
-        description: 'print the output in real-time if true',
+        description: 'Print the output in real-time if true',
         default: false,
     })
     .demandOption(['project'], 'Please provide the project argument to proceed')
