@@ -9,29 +9,70 @@ const { randomAddress } = require('./utils');
 const { deploy } = require('./utils');
 
 function visualize(results) {
-    let data = [[
-        "File",
-        "Contract Name",
-        "Functions Can Get Fuzzed"
-    ]];
+    let data = [
+        ["File", "Contract Name", "Functions Can Get Fuzzed"]
+    ];
     if (!(results.length > 0 && results[0].success)) {
         console.error("Build failed!");
         return;
     }
-    let result = results[0]
+    let result = results[0];
     for (let contract_file_name of Object.keys(result.abi)) {
         let contract = result.abi[contract_file_name];
         for (let name of Object.keys(contract)) {
             let abis = contract[name];
             if (name === "FuzzLand" || name.includes("Scribble")) {
-                continue
+                continue;
             }
             let abi_count = abis.filter(x => x.type === "function").length;
             data.push([contract_file_name, name, abi_count]);
         }
     }
 
-    console.log(table(data))
+    console.log(table(data));
+}
+
+function executeCommand(command, options, onExit, isPrint) {
+    if (isPrint) {
+        const [cmd, ...args] = command.split(' ');
+        const childProcess = spawn(cmd, args, options);
+
+        childProcess.stdout.on('data', (data) => {
+            console.log(`stdout: ${data}`);
+        });
+
+        childProcess.stderr.on('data', (data) => {
+            console.error(`stderr: ${data}`);
+        });
+
+        childProcess.on('close', (code) => {
+            console.log(`Child process exited with code ${code}`);
+            onExit(code);
+        });
+
+        return childProcess;
+    } else {
+        const childProcess = exec(command, options, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`error: ${error.message}`);
+                process.exit();
+                return;
+            }
+            if (stderr) {
+                console.error(`stderr: ${stderr}`);
+                return;
+            }
+            console.log(`stdout: ${stdout}`);
+            onExit(0); // Assuming success, you might want to adjust this based on your use case
+        });
+
+        process.on('SIGINT', () => {
+            console.log('Received SIGINT. Terminating child process.');
+            childProcess.kill('SIGINT');
+        });
+
+        return childProcess;
+    }
 }
 
 async function build_with_autodetect(project, projectType, compiler_version, daemon, autoStart, setupFile, isPrint) {
@@ -50,7 +91,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
 
     if (!setupFile) {
         console.log("Starting anvil...");
-        anvil = exec('anvil');
+        anvil = executeCommand('anvil', {}, () => {}, false);
 
         process.on('SIGINT', () => {
             anvil.kill();
@@ -107,42 +148,11 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
         console.log(`Starting ityfuzz with command: ${command}`);
 
         // maxBuffer: 100MB
-        const options = { maxBuffer:  1024 * 1024 * 100 };
-        if (isPrint) {
-            const [cmd, ...args] = command.split(' ');
-            const childProcess = spawn(cmd, args, options);
-
-            childProcess.stdout.on('data', (data) => {
-                console.log(`stdout: ${data}`);
-            });
-
-            childProcess.stderr.on('data', (data) => {
-                console.error(`stderr: ${data}`);
-            });
-
-            childProcess.on('close', (code) => {
-                console.log(`Child process exited with code ${code}`);
-                process.exit();
-            });
-        } else {
-            const childProcess = exec(command, options, (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`error: ${error.message}`);
-                    process.exit();
-                    return;
-                }
-                if (stderr) {
-                    console.error(`stderr: ${stderr}`);
-                    return;
-                }
-                console.log(`stdout: ${stdout}`);
-            });
-
-            process.on('SIGINT', () => {
-                console.log('Received SIGINT. Terminating child process.');
-                childProcess.kill('SIGINT');
-            });
-        }
+        const options = { maxBuffer: 1024 * 1024 * 100 };
+        executeCommand(command, options, (code) => {
+            console.log(`Child process exited with code ${code}`);
+            process.exit();
+        }, isPrint);
     }
 
     if (daemon) {
@@ -152,7 +162,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
     if (!setupFile) {
         anvil.kill();
     }
-    if (!autoStart&&!daemon){
+    if (!autoStart && !daemon) {
         process.exit();
     }
 }
@@ -169,7 +179,7 @@ const argv = yargs(hideBin(process.argv))
         },
         async (argv) => {
             if (argv.project) {
-                await build_with_autodetect(argv.project, argv.projectType, argv.compilerVersion, argv.daemon, argv.autoStart, argv.setupFile, argv.print);
+                await build_with_autodetect(argv.project, argv.projectType, argv.compilerVersion, argv.daemon, argv.autoStart, argv.setupFile, argv.printing);
             }
         }
     )
