@@ -140,10 +140,14 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
 
     if (autoStart) {
         let command = "";
+        const ityfuzzDir = "./.ityfuzz";
+        if (!fs.existsSync(ityfuzzDir)) {
+            fs.mkdirSync(ityfuzzDir);
+        }
         if (setupFile) {
-            command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./.ityfuzz --setup-file ${setupFile}`;
+            command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ${ityfuzzDir} --setup-file ${setupFile}`;
         } else {
-            command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -i -t "a" --work-dir ./.ityfuzz`;
+            command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -i -t "a" --work-dir ${ityfuzzDir}`;
         }
         console.log(`Starting ityfuzz with command: ${command}`);
 
