@@ -13,8 +13,11 @@ async function auto_detect(task_dir) {
     if (fs.existsSync(path.join(task_dir, "forge.toml")) || fs.existsSync(path.join(task_dir, "foundry.toml"))) {
         return "forge"
     } 
-    if (fs.existsSync(path.join(task_dir, "hardhat.config.js"))) {
-        return "hardhat"
+    const jsConfigPath = path.join(task_dir, "hardhat.config.js");
+    const tsConfigPath = path.join(task_dir, "hardhat.config.ts");
+
+    if (fs.existsSync(jsConfigPath) || fs.existsSync(tsConfigPath)) {
+        return "hardhat";
     }
     console.log("Unknown project, treating everything *.sol in this folder as smart contract.")
     return "solidity_folder"
