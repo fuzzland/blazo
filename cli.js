@@ -102,7 +102,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
         if (setupFile) {
             command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
         } else {
-            command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -i -t "a" --work-dir ./workdir`;
+            command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -t "a" --work-dir ./workdir`;
         }
         console.log(`Starting ityfuzz with command: ${command}`);
         exec(command, (error, stdout, stderr) => {
