@@ -105,16 +105,22 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
             command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -t "a" --work-dir ./workdir`;
         }
         console.log(`Starting ityfuzz with command: ${command}`);
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`error: ${error.message}`);
-                return;
-            }
-            if (stderr) {
-                console.error(`stderr: ${stderr}`);
-                return;
-            }
-            console.log(`stdout: ${stdout}`);
+        const process = exec(command);
+
+        process.stdout.on('data', (data) => {
+            console.log(`${data}`);
+        });
+
+        process.stderr.on('data', (data) => {
+            console.error(`${data}`);
+        });
+
+        process.on('error', (error) => {
+            console.error(`error: ${error.message}`);
+        });
+
+        process.on('close', (code) => {
+            console.log(`Child process exited with code ${code}`);
         });
     }
 

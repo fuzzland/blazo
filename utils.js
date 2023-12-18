@@ -15,38 +15,43 @@ async function deployContract(bytecode, port) {
         }]
     });
 
-    const deployResponse = await axios.post(`http://localhost:${port}`, deployData, {
-        headers: {
-            'content-type': 'application/json'
-        }
-    });
+    try {
+        const deployResponse = await axios.post(`http://localhost:${port}`, deployData, {
+            headers: {
+                'content-type': 'application/json'
+            }
+        });
 
-    if (!deployResponse.data || !deployResponse.data.result) {
-        console.log('Failed to deploy contract');
+        if (!deployResponse.data || !deployResponse.data.result) {
+            console.log('Failed to deploy contract');
+            return [];
+        }
+
+        const txHash = deployResponse.data.result;
+
+        const traceData = JSON.stringify({
+            id: 2,
+            jsonrpc: "2.0",
+            method: "trace_transaction",
+            params: [txHash]
+        });
+
+        const traceResponse = await axios.post(`http://localhost:${port}`, traceData, {
+            headers: {
+                'content-type': 'application/json'
+            }
+        });
+
+        if (!traceResponse.data || !traceResponse.data.result || traceResponse.data.result.length === 0) {
+            console.log('Failed to trace transaction');
+            return [];
+        }
+
+        return traceResponse.data.result;
+    } catch (e) {
+        console.log(e);
         return [];
     }
-
-    const txHash = deployResponse.data.result;
-
-    const traceData = JSON.stringify({
-        id: 2,
-        jsonrpc: "2.0",
-        method: "trace_transaction",
-        params: [txHash]
-    });
-
-    const traceResponse = await axios.post(`http://localhost:${port}`, traceData, {
-        headers: {
-            'content-type': 'application/json'
-        }
-    });
-
-    if (!traceResponse.data || !traceResponse.data.result || traceResponse.data.result.length === 0) {
-        console.log('Failed to trace transaction');
-        return [];
-    }
-
-    return traceResponse.data.result;
 }
 
 async function deploy(data, offchainConfig) {
