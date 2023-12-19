@@ -126,7 +126,7 @@ function generate_settings(original = {}) {
     return basic;
 }
 
-async function handleBuildResult(output, compiler_json, contract_name, starting) {
+async function handleBuildResult(output, compiler_version, compiler_json, contract_name, starting) {
     for (let error of output?.errors || []) {
         if (error['severity'] === 'error') {
             console.log(error['formattedMessage']);
@@ -287,7 +287,13 @@ async function work_on_json(compiler_version, compiler_json, contract_name) {
                     }
 
                     const output = JSON.parse(fs.readFileSync(outputJson, 'utf8'));
-                    const result = await handleBuildResult(output, compiler_json, contract_name, starting);
+                    const result = await handleBuildResult(
+                        output,
+                        compiler_version,
+                        compiler_json,
+                        contract_name,
+                        starting,
+                    );
 
                     resolve({
                         success: true,
@@ -298,7 +304,7 @@ async function work_on_json(compiler_version, compiler_json, contract_name) {
             );
         } else {
             const output = JSON.parse(fs.readFileSync(outputJson, 'utf8'));
-            const result = await handleBuildResult(output, compiler_json, contract_name, starting);
+            const result = await handleBuildResult(output, compiler_version, compiler_json, contract_name, starting);
 
             resolve({
                 success: true,
