@@ -237,7 +237,13 @@ async function handleBuildResult(output, compiler_json, contract_name, starting)
         };
     }
 
-    return { ast, sourcemap, sources, bytecode, runtime_bytecode, abi, invariants };
+    let compiler_args = null;
+    compiler_args = {
+        version: compiler_version,
+        compiler_json,
+    };
+
+    return { ast, sourcemap, sources, bytecode, runtime_bytecode, abi, invariants, compiler_args };
 }
 
 async function work_on_json(compiler_version, compiler_json, contract_name) {
@@ -281,55 +287,23 @@ async function work_on_json(compiler_version, compiler_json, contract_name) {
                     }
 
                     const output = JSON.parse(fs.readFileSync(outputJson, 'utf8'));
-                    const { ast, sourcemap, sources, bytecode, runtime_bytecode, abi, invariants } =
-                        await handleBuildResult(output, compiler_json, contract_name, starting);
-
-                    let compiler_args = null;
-                    compiler_args = {
-                        version: compiler_version,
-                        compiler_json,
-                    };
+                    const result = await handleBuildResult(output, compiler_json, contract_name, starting);
 
                     resolve({
                         success: true,
                         remappings: compiler_json.settings['remappings'],
-                        ast,
-                        sourcemap,
-                        sources,
-                        bytecode,
-                        runtime_bytecode,
-                        abi,
-                        invariants,
-                        compiler_args,
+                        ...result,
                     });
                 },
             );
         } else {
             const output = JSON.parse(fs.readFileSync(outputJson, 'utf8'));
-            const { ast, sourcemap, sources, bytecode, runtime_bytecode, abi, invariants } = await handleBuildResult(
-                output,
-                compiler_json,
-                contract_name,
-                starting,
-            );
-
-            let compiler_args = null;
-            compiler_args = {
-                version: compiler_version,
-                compiler_json,
-            };
+            const result = await handleBuildResult(output, compiler_json, contract_name, starting);
 
             resolve({
                 success: true,
                 remappings: compiler_json.settings['remappings'],
-                ast,
-                sourcemap,
-                sources,
-                bytecode,
-                runtime_bytecode,
-                abi,
-                invariants,
-                compiler_args,
+                ...result,
             });
         }
     });
