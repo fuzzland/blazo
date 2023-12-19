@@ -7,7 +7,7 @@ const { table } = require('table');
 const { exec } = require('child_process');
 const { randomAddress } = require('./utils');
 const { deploy } = require('./utils');
-const { buildCoveragePage } = require('./html');
+const { buildCoveragePage } = require('./coverage');
 
 function visualize(results) {
     let data = [['File', 'Contract Name', 'Functions Can Get Fuzzed']];
@@ -61,7 +61,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
             for (const contractName in offchainConfig[fileName]) {
                 offchainConfig[fileName][contractName] = {
                     address: randomAddress(),
-                    constructor_args: '0x'
+                    constructor_args: '0x',
                 };
             }
         }
@@ -69,7 +69,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
         fs.writeFileSync('offchain_config.json', JSON.stringify(offchainConfig, null, 4));
 
         console.log(
-            'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue'
+            'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue',
         );
 
         await new Promise((resolve) => {
@@ -97,7 +97,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
 
     fs.writeFileSync('results.json', JSON.stringify(results, null, 4));
     visualize(results);
-    console.log('Results written to results.json', autoStart);
+    console.log('Results written to results.json');
 
     if (autoStart) {
         let command = '';
@@ -145,7 +145,7 @@ const argv = yargs(hideBin(process.argv))
         (yargs) => {
             yargs.positional('project', {
                 describe: 'Name of the project to build',
-                type: 'string'
+                type: 'string',
             });
         },
         async (argv) => {
@@ -156,35 +156,35 @@ const argv = yargs(hideBin(process.argv))
                     argv.compilerVersion,
                     argv.daemon,
                     argv.autoStart,
-                    argv.setupFile
+                    argv.setupFile,
                 );
             }
-        }
+        },
     )
     .option('project-type', {
         alias: 't',
         type: 'string',
-        description: 'Type of the project'
+        description: 'Type of the project',
     })
     .option('compiler-version', {
         alias: 'c',
         type: 'string',
-        description: 'Specify the compiler version to use'
+        description: 'Specify the compiler version to use',
     })
     .option('daemon', {
         alias: 'd',
         type: 'boolean',
-        description: 'Run in daemon mode'
+        description: 'Run in daemon mode',
     })
     .option('auto-start', {
         alias: 's',
         type: 'boolean',
-        description: 'Automatically run ityfuzz after building'
+        description: 'Automatically run ityfuzz after building',
     })
     .option('setup-file', {
         alias: 'f',
         type: 'string',
-        description: 'Specify the setup file to use'
+        description: 'Specify the setup file to use',
     })
     .demandOption(['project'], 'Please provide the project argument to proceed')
     .help().argv;

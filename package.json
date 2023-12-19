@@ -15,7 +15,6 @@
     "glob": "^10.3.10",
     "hamming-distance": "^1.0.0",
     "memorystream": "^0.3.1",
-    "solc": "^0.8.21",
     "solc-typed-ast": "^17.0.0",
     "table": "^6.8.1",
     "uuid": "^9.0.1",

@@ -4,25 +4,6 @@ const { table } = require('table');
 
 const dir = process.cwd();
 
-let files;
-try {
-    files = fs.readFileSync(path.join(dir, 'workdir/files.json'));
-} catch (err) {
-    console.log('files.json not found, skipping coverage page generation');
-    return;
-}
-const filesJson = JSON.parse(files.toString());
-
-let coverage;
-try {
-    coverage = fs.readFileSync(path.join(dir, 'workdir/coverage_json.json'));
-} catch (err) {
-    console.log('coverage_json.json not found, skipping coverage page generation');
-    return;
-}
-
-const coverageJson = JSON.parse(coverage.toString());
-
 function divideCalculate(numerator, denominator) {
     if (denominator === 0 || isNaN(denominator)) {
         return 0;
@@ -44,14 +25,12 @@ function getTransformedContractFiles(contractFiles) {
                 result[`${address}__${filename}`] = code;
             }
             return result;
-        }, {})
+        }, {}),
     );
     return Object.assign({}, ...results);
 }
 
-const transformedContractFiles = getTransformedContractFiles(filesJson);
-
-function getTransformedCoverageJson() {
+function getTransformedCoverageJson(coverageJson) {
     const results = {};
     if (!coverageJson.coverage) return results;
     for (const [key, value] of Object.entries(coverageJson.coverage)) {
@@ -72,8 +51,6 @@ function getTransformedCoverageJson() {
     }
     return results;
 }
-
-const transformedCoverageJson = getTransformedCoverageJson();
 
 function getHighlightLineCount(arr, code) {
     let lineWords = {};
@@ -130,6 +107,28 @@ function generateHTML(table) {
 function buildCoveragePage() {
     let data = [['Contract Address', 'File Name', 'Coverage']];
     let output = '';
+
+    let files;
+    try {
+        files = fs.readFileSync(path.join(dir, 'workdir/files.json'));
+    } catch (err) {
+        console.log('files.json not found, skipping coverage page generation');
+        return;
+    }
+    const filesJson = JSON.parse(files.toString());
+
+    let coverage;
+    try {
+        coverage = fs.readFileSync(path.join(dir, 'workdir/coverage_json.json'));
+    } catch (err) {
+        console.log('coverage_json.json not found, skipping coverage page generation');
+        return;
+    }
+
+    const coverageJson = JSON.parse(coverage.toString());
+    const transformedContractFiles = getTransformedContractFiles(filesJson);
+    const transformedCoverageJson = getTransformedCoverageJson(coverageJson);
+
     Object.entries(transformedCoverageJson)
         .sort((a, b) => {
             const [keyA, valueA] = a;
@@ -168,5 +167,5 @@ function buildCoveragePage() {
 }
 
 module.exports = {
-    buildCoveragePage
+    buildCoveragePage,
 };
