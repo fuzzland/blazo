@@ -2,6 +2,7 @@ const axios = require('axios');
 const compare = require('hamming-distance');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 async function deployContract(bytecode, port) {
     const deployData = JSON.stringify({
@@ -14,16 +15,16 @@ async function deployContract(bytecode, port) {
                 from: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
                 gas: '0x9716c0',
                 gasPrice: '0x9184e72a000',
-                value: '0x0'
-            }
-        ]
+                value: '0x0',
+            },
+        ],
     });
 
     try {
         const deployResponse = await axios.post(`http://localhost:${port}`, deployData, {
             headers: {
-                'content-type': 'application/json'
-            }
+                'content-type': 'application/json',
+            },
         });
 
         if (!deployResponse.data || !deployResponse.data.result) {
@@ -37,13 +38,13 @@ async function deployContract(bytecode, port) {
             id: 2,
             jsonrpc: '2.0',
             method: 'trace_transaction',
-            params: [txHash]
+            params: [txHash],
         });
 
         const traceResponse = await axios.post(`http://localhost:${port}`, traceData, {
             headers: {
-                'content-type': 'application/json'
-            }
+                'content-type': 'application/json',
+            },
         });
 
         if (!traceResponse.data || !traceResponse.data.result || traceResponse.data.result.length === 0) {
@@ -75,7 +76,7 @@ async function deploy(data, offchainConfig) {
                     for (const result of results) {
                         bytecodeToAddress.push({
                             code: result.result.code,
-                            address: result.result.address
+                            address: result.result.address,
                         });
                     }
                 }
@@ -115,13 +116,13 @@ async function deploy(data, offchainConfig) {
                         if (bytecodeBuffer.length < targetLength) {
                             paddedBytecodeBuffer = Buffer.concat([
                                 bytecodeBuffer,
-                                Buffer.alloc(targetLength - bytecodeBuffer.length)
+                                Buffer.alloc(targetLength - bytecodeBuffer.length),
                             ]);
                         }
                         if (codeBuffer.length < targetLength) {
                             paddedCodeBuffer = Buffer.concat([
                                 codeBuffer,
-                                Buffer.alloc(targetLength - codeBuffer.length)
+                                Buffer.alloc(targetLength - codeBuffer.length),
                             ]);
                         }
 
@@ -165,9 +166,20 @@ function hasPnpm(cwd = process.cwd()) {
     return fs.existsSync(path.resolve(cwd, 'pnpm-lock.yaml'));
 }
 
+function checkSolcSelectInstalled() {
+    try {
+        execSync('solc-select versions');
+        return true;
+    } catch (error) {
+        console.log(error.message);
+        return false;
+    }
+}
+
 module.exports = {
     randomAddress,
     deploy,
     hasYarn,
-    hasPnpm
+    hasPnpm,
+    checkSolcSelectInstalled,
 };

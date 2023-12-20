@@ -8,6 +8,7 @@ const { exit } = require('process');
 const fs = require('fs');
 const { get_ast, get_invariants } = require('./ast');
 const crypto = require('crypto');
+const { checkSolcSelectInstalled } = require('./utils');
 
 async function auto_detect(task_dir) {
     const files = fs.readdirSync(task_dir);
@@ -102,7 +103,7 @@ async function handle_multi_build(task_dir, compiler_version, resolve) {
                 remappings,
             },
         },
-        '',
+        ''
     );
     resolve(result);
 }
@@ -275,33 +276,67 @@ async function work_on_json(compiler_version, compiler_json, contract_name) {
         const outputJson = `.tmp/compile_output_${contractHash}.json`;
 
         if (!fs.existsSync(outputJson)) {
-            exec(
-                `pip3 install solc-select &&
+            if (checkSolcSelectInstalled()) {
+                exec(
+                    `
                 solc-select use ${versionNumber} --always-install && 
                 solc --standard-json < ${currentFile} > ${outputJson}`,
-                async (err, stdout, stderr) => {
-                    if (err) {
-                        console.log('Error loading solc', stderr);
-                        resolve({ success: false, err: stderr });
-                        return;
+                    async (err, stdout, stderr) => {
+                        if (err) {
+                            console.log('Error loading solc', stderr);
+                            resolve({ success: false, err: stderr });
+                            return;
+                        }
+
+                        console.log(stdout);
+
+                        const output = JSON.parse(fs.readFileSync(outputJson, 'utf8'));
+                        const result = await handleBuildResult(
+                            output,
+                            compiler_version,
+                            compiler_json,
+                            contract_name,
+                            starting
+                        );
+
+                        resolve({
+                            success: true,
+                            remappings: compiler_json.settings['remappings'],
+                            ...result,
+                        });
                     }
+                );
+            } else {
+                exec(
+                    `pip3 install solc-select &&
+                    solc-select use ${versionNumber} --always-install && 
+                    solc --standard-json < ${currentFile} > ${outputJson}`,
+                    async (err, stdout, stderr) => {
+                        if (err) {
+                            console.log('Error loading solc', stderr);
+                            resolve({ success: false, err: stderr });
+                            return;
+                        }
 
-                    const output = JSON.parse(fs.readFileSync(outputJson, 'utf8'));
-                    const result = await handleBuildResult(
-                        output,
-                        compiler_version,
-                        compiler_json,
-                        contract_name,
-                        starting,
-                    );
+                        console.log(stdout);
 
-                    resolve({
-                        success: true,
-                        remappings: compiler_json.settings['remappings'],
-                        ...result,
-                    });
-                },
-            );
+                        const output = JSON.parse(fs.readFileSync(outputJson, 'utf8'));
+                        const result = await handleBuildResult(
+                            output,
+                            compiler_version,
+                            compiler_json,
+                            contract_name,
+                            starting
+                        );
+
+                        resolve({
+                            success: true,
+                            remappings: compiler_json.settings['remappings'],
+                            ...result,
+                        });
+                    }
+                );
+            }
         } else {
             const output = JSON.parse(fs.readFileSync(outputJson, 'utf8'));
             const result = await handleBuildResult(output, compiler_version, compiler_json, contract_name, starting);
