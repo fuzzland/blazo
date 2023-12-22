@@ -30,7 +30,7 @@ function getTransformedContractFiles(contractFiles) {
     return Object.assign({}, ...results);
 }
 
-function getTransformedCoverageJson(coverageJson) {
+function getTransformedCoverageJson(coverageJson, transformedContractFiles) {
     const results = {};
     if (!coverageJson.coverage) return results;
     for (const [key, value] of Object.entries(coverageJson.coverage)) {
@@ -127,7 +127,7 @@ function buildCoveragePage() {
 
     const coverageJson = JSON.parse(coverage.toString());
     const transformedContractFiles = getTransformedContractFiles(filesJson);
-    const transformedCoverageJson = getTransformedCoverageJson(coverageJson);
+    const transformedCoverageJson = getTransformedCoverageJson(coverageJson, transformedContractFiles);
 
     Object.entries(transformedCoverageJson)
         .sort((a, b) => {
