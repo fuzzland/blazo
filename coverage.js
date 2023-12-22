@@ -25,7 +25,7 @@ function getTransformedContractFiles(contractFiles) {
                 result[`${address}__${filename}`] = code;
             }
             return result;
-        }, {}),
+        }, {})
     );
     return Object.assign({}, ...results);
 }
@@ -119,9 +119,9 @@ function buildCoveragePage() {
 
     let coverage;
     try {
-        coverage = fs.readFileSync(path.join(dir, 'workdir/coverage_json.json'));
+        coverage = fs.readFileSync(path.join(dir, 'workdir/coverage.json'));
     } catch (err) {
-        console.log('coverage_json.json not found, skipping coverage page generation');
+        console.log('coverage.json not found, skipping coverage page generation');
         return;
     }
 
