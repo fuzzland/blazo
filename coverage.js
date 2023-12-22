@@ -25,7 +25,7 @@ function getTransformedContractFiles(contractFiles) {
                 result[`${address}__${filename}`] = code;
             }
             return result;
-        }, {})
+        }, {}),
     );
     return Object.assign({}, ...results);
 }
@@ -166,6 +166,21 @@ function buildCoveragePage() {
     }
 }
 
+function handleBuildCoverage() {
+    const directoryToWatch = './workdir';
+    const filesToCheck = ['files.json', 'coverage.json'];
+
+    const checkFilesExistence = () => {
+        const filesExist = filesToCheck.every((file) => fs.existsSync(`${directoryToWatch}/${file}`));
+
+        if (filesExist) {
+            buildCoveragePage();
+            fs.unwatchFile(directoryToWatch);
+        }
+    };
+    fs.watchFile(directoryToWatch, checkFilesExistence);
+}
+
 module.exports = {
-    buildCoveragePage,
+    handleBuildCoverage,
 };

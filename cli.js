@@ -7,7 +7,7 @@ const { table } = require('table');
 const { exec } = require('child_process');
 const { randomAddress } = require('./utils');
 const { deploy } = require('./utils');
-const { buildCoveragePage } = require('./coverage');
+const { handleBuildCoverage } = require('./coverage');
 
 function visualize(results) {
     let data = [['File', 'Contract Name', 'Functions Can Get Fuzzed']];
@@ -108,7 +108,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
         }
         console.log(`Starting ityfuzz with command: ${command}`);
 
-        buildCoveragePage();
+        handleBuildCoverage();
 
         const process = exec(command);
 
