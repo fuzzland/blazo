@@ -4,7 +4,7 @@ const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const fs = require('fs');
 const { table } = require('table');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const { randomAddress } = require('./utils');
 const { deploy } = require('./utils');
 const { handleBuildCoverage } = require('./coverage');
@@ -31,7 +31,52 @@ function visualize(results) {
     console.log(table(data));
 }
 
-async function build_with_autodetect(project, projectType, compiler_version, daemon, autoStart, setupFile) {
+function executeCommand(command, options, onExit, isPrint) {
+    if (isPrint) {
+        const [cmd, ...args] = command.split(' ');
+        const childProcess = spawn(cmd, args, options);
+
+        childProcess.stdout.on('data', (data) => {
+            console.log(`stdout: ${data}`);
+        });
+
+        childProcess.stderr.on('data', (data) => {
+            console.error(`stderr: ${data}`);
+        });
+
+        childProcess.on('error', (error) => {
+            console.error(`error: ${error}`);
+            process.exit(1);
+        });
+
+        childProcess.on('close', (code) => {
+            onExit(code);
+        });
+
+        return childProcess;
+    } else {
+        const childProcess = exec(command, options, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`error: ${error}`);
+                // process.exit(1);
+                // onExit(0);
+            }
+            if (stderr) {
+                console.error(`stderr: ${stderr}`);
+            }
+            console.log(`stdout: ${stdout}`);
+            onExit(0); // Assuming success, you might want to adjust this based on your use case
+        });
+        process.on('SIGINT', () => {
+            console.log('Received SIGINT. Terminating child process.');
+            childProcess.kill('SIGINT');
+        });
+
+        return childProcess;
+    }
+}
+
+async function build_with_autodetect(project, projectType, compiler_version, daemon, autoStart, setupFile, isPrint) {
     if (!projectType) {
         projectType = await auto_detect(project);
     }
@@ -46,6 +91,8 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
 
     if (!setupFile) {
         console.log('Starting anvil...');
+        // dont't exit when some transactions failed
+        // anvil = executeCommand('anvil', {}, () => {}, false);
         anvil = exec('anvil');
 
         process.on('SIGINT', () => {
@@ -97,10 +144,11 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
 
     fs.writeFileSync('results.json', JSON.stringify(results, null, 4));
     visualize(results);
-    console.log('Results written to results.json');
+    console.log(`Results written to results.json`);
 
     if (autoStart) {
         let command = '';
+
         if (setupFile) {
             command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
         } else {
@@ -110,23 +158,17 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
 
         handleBuildCoverage();
 
-        const process = exec(command);
-
-        process.stdout.on('data', (data) => {
-            console.log(`${data}`);
-        });
-
-        process.stderr.on('data', (data) => {
-            console.error(`${data}`);
-        });
-
-        process.on('error', (error) => {
-            console.error(`error: ${error.message}`);
-        });
-
-        process.on('close', (code) => {
-            console.log(`Child process exited with code ${code}`);
-        });
+        // maxBuffer: 100MB
+        const options = { maxBuffer: 1024 * 1024 * 100 };
+        executeCommand(
+            command,
+            options,
+            (code) => {
+                console.log(`Child process exited with code ${code}`);
+                process.exit();
+            },
+            isPrint,
+        );
     }
 
     if (daemon) {
@@ -135,6 +177,9 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
 
     if (!setupFile) {
         anvil.kill();
+    }
+    if (!autoStart && !daemon) {
+        process.exit();
     }
 }
 
@@ -157,6 +202,7 @@ const argv = yargs(hideBin(process.argv))
                     argv.daemon,
                     argv.autoStart,
                     argv.setupFile,
+                    argv.printing,
                 );
             }
         },
@@ -185,6 +231,12 @@ const argv = yargs(hideBin(process.argv))
         alias: 'f',
         type: 'string',
         description: 'Specify the setup file to use',
+    })
+    .option('printing', {
+        alias: 'p',
+        type: 'boolean',
+        description: 'Print the output in real-time if true',
+        default: false,
     })
     .demandOption(['project'], 'Please provide the project argument to proceed')
     .help().argv;

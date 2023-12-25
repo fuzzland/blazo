@@ -103,7 +103,7 @@ async function handle_multi_build(task_dir, compiler_version, resolve) {
                 remappings,
             },
         },
-        ''
+        '',
     );
     resolve(result);
 }
@@ -296,7 +296,7 @@ async function work_on_json(compiler_version, compiler_json, contract_name) {
                             compiler_version,
                             compiler_json,
                             contract_name,
-                            starting
+                            starting,
                         );
 
                         resolve({
@@ -304,7 +304,7 @@ async function work_on_json(compiler_version, compiler_json, contract_name) {
                             remappings: compiler_json.settings['remappings'],
                             ...result,
                         });
-                    }
+                    },
                 );
             } else {
                 exec(
@@ -326,7 +326,7 @@ async function work_on_json(compiler_version, compiler_json, contract_name) {
                             compiler_version,
                             compiler_json,
                             contract_name,
-                            starting
+                            starting,
                         );
 
                         resolve({
@@ -334,7 +334,7 @@ async function work_on_json(compiler_version, compiler_json, contract_name) {
                             remappings: compiler_json.settings['remappings'],
                             ...result,
                         });
-                    }
+                    },
                 );
             }
         } else {
