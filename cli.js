@@ -7,35 +7,31 @@ const { table } = require('table');
 const { exec } = require('child_process');
 const { randomAddress } = require('./utils');
 const { deploy } = require('./utils');
+const { handleBuildCoverage } = require('./coverage');
 
 function visualize(results) {
-    let data = [[
-        "File",
-        "Contract Name",
-        "Functions Can Get Fuzzed"
-    ]];
+    let data = [['File', 'Contract Name', 'Functions Can Get Fuzzed']];
     if (!(results.length > 0 && results[0].success)) {
-        console.error("Build failed!");
+        console.error('Build failed!');
         return;
     }
-    let result = results[0]
+    let result = results[0];
     for (let contract_file_name of Object.keys(result.abi)) {
         let contract = result.abi[contract_file_name];
         for (let name of Object.keys(contract)) {
             let abis = contract[name];
-            if (name === "FuzzLand" || name.includes("Scribble")) {
-                continue
+            if (name === 'FuzzLand' || name.includes('Scribble')) {
+                continue;
             }
-            let abi_count = abis.filter(x => x.type === "function").length;
+            let abi_count = abis.filter((x) => x.type === 'function').length;
             data.push([contract_file_name, name, abi_count]);
         }
     }
 
-    console.log(table(data))
+    console.log(table(data));
 }
 
 async function build_with_autodetect(project, projectType, compiler_version, daemon, autoStart, setupFile) {
-
     if (!projectType) {
         projectType = await auto_detect(project);
     }
@@ -49,7 +45,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
     let anvil = null;
 
     if (!setupFile) {
-        console.log("Starting anvil...");
+        console.log('Starting anvil...');
         anvil = exec('anvil');
 
         process.on('SIGINT', () => {
@@ -64,15 +60,17 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
         for (const fileName in offchainConfig) {
             for (const contractName in offchainConfig[fileName]) {
                 offchainConfig[fileName][contractName] = {
-                    "address": randomAddress(),
-                    "constructor_args": "0x"
-                }
+                    address: randomAddress(),
+                    constructor_args: '0x',
+                };
             }
         }
 
-        fs.writeFileSync("offchain_config.json", JSON.stringify(offchainConfig, null, 4));
+        fs.writeFileSync('offchain_config.json', JSON.stringify(offchainConfig, null, 4));
 
-        console.log("Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue");
+        console.log(
+            'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue',
+        );
 
         await new Promise((resolve) => {
             process.stdin.once('data', (chunk) => {
@@ -83,28 +81,35 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
         let artifacts = await deploy(results, offchainConfig);
 
         for (const artifact of artifacts) {
-            for (const fileName in artifact["address"]) {
-                for (const contractName in artifact["address"][fileName]) {
-                    if (offchainConfig.hasOwnProperty(fileName) && offchainConfig[fileName].hasOwnProperty(contractName) && artifact["address"][fileName][contractName]) {
-                        offchainConfig[fileName][contractName]["address"] = artifact["address"][fileName][contractName];
+            for (const fileName in artifact['address']) {
+                for (const contractName in artifact['address'][fileName]) {
+                    if (
+                        offchainConfig.hasOwnProperty(fileName) &&
+                        offchainConfig[fileName].hasOwnProperty(contractName) &&
+                        artifact['address'][fileName][contractName]
+                    ) {
+                        offchainConfig[fileName][contractName]['address'] = artifact['address'][fileName][contractName];
                     }
                 }
             }
         }
     }
 
-    fs.writeFileSync("results.json", JSON.stringify(results, null, 4));
+    fs.writeFileSync('results.json', JSON.stringify(results, null, 4));
     visualize(results);
-    console.log("Results written to results.json");
+    console.log('Results written to results.json');
 
     if (autoStart) {
-        let command = "";
+        let command = '';
         if (setupFile) {
             command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
         } else {
             command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -t "a" --work-dir ./workdir`;
         }
         console.log(`Starting ityfuzz with command: ${command}`);
+
+        handleBuildCoverage();
+
         const process = exec(command);
 
         process.stdout.on('data', (data) => {
@@ -125,7 +130,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
     }
 
     if (daemon) {
-        await new Promise(() => { });
+        await new Promise(() => {});
     }
 
     if (!setupFile) {
@@ -145,9 +150,16 @@ const argv = yargs(hideBin(process.argv))
         },
         async (argv) => {
             if (argv.project) {
-                await build_with_autodetect(argv.project, argv.projectType, argv.compilerVersion, argv.daemon, argv.autoStart, argv.setupFile);
+                await build_with_autodetect(
+                    argv.project,
+                    argv.projectType,
+                    argv.compilerVersion,
+                    argv.daemon,
+                    argv.autoStart,
+                    argv.setupFile,
+                );
             }
-        }
+        },
     )
     .option('project-type', {
         alias: 't',
@@ -175,5 +187,4 @@ const argv = yargs(hideBin(process.argv))
         description: 'Specify the setup file to use',
     })
     .demandOption(['project'], 'Please provide the project argument to proceed')
-    .help()
-    .argv;
+    .help().argv;
