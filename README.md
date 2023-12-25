@@ -33,6 +33,7 @@ OPTIONS
   -d, --daemon            Run in daemon mode
   -s, --auto-start        Automatically run ityfuzz after building
   -f, --setup-file        Specify the setup file to use
+  -p, --printing          Print the output in real-time if true
   --help                  Show help
   --version               Show version
 
