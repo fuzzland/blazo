@@ -7,13 +7,12 @@ const { table } = require('table');
 const { exec, spawn } = require('child_process');
 const { randomAddress } = require('./utils');
 const { deploy } = require('./utils');
+const { handleBuildCoverage } = require('./coverage');
 
 function visualize(results) {
-    let data = [
-        ["File", "Contract Name", "Functions Can Get Fuzzed"]
-    ];
+    let data = [['File', 'Contract Name', 'Functions Can Get Fuzzed']];
     if (!(results.length > 0 && results[0].success)) {
-        console.error("Build failed!");
+        console.error('Build failed!');
         return;
     }
     let result = results[0];
@@ -21,10 +20,10 @@ function visualize(results) {
         let contract = result.abi[contract_file_name];
         for (let name of Object.keys(contract)) {
             let abis = contract[name];
-            if (name === "FuzzLand" || name.includes("Scribble")) {
+            if (name === 'FuzzLand' || name.includes('Scribble')) {
                 continue;
             }
-            let abi_count = abis.filter(x => x.type === "function").length;
+            let abi_count = abis.filter((x) => x.type === 'function').length;
             data.push([contract_file_name, name, abi_count]);
         }
     }
@@ -45,8 +44,12 @@ function executeCommand(command, options, onExit, isPrint) {
             console.error(`stderr: ${data}`);
         });
 
+        childProcess.on('error', (error) => {
+            console.error(`error: ${error}`);
+            process.exit(1);
+        });
+
         childProcess.on('close', (code) => {
-            console.log(`Child process exited with code ${code}`);
             onExit(code);
         });
 
@@ -54,18 +57,16 @@ function executeCommand(command, options, onExit, isPrint) {
     } else {
         const childProcess = exec(command, options, (error, stdout, stderr) => {
             if (error) {
-                console.error(`error: ${error.message}`);
-                process.exit();
-                return;
+                console.error(`error: ${error}`);
+                // process.exit(1);
+                // onExit(0);
             }
             if (stderr) {
                 console.error(`stderr: ${stderr}`);
-                return;
             }
             console.log(`stdout: ${stdout}`);
             onExit(0); // Assuming success, you might want to adjust this based on your use case
         });
-
         process.on('SIGINT', () => {
             console.log('Received SIGINT. Terminating child process.');
             childProcess.kill('SIGINT');
@@ -76,7 +77,6 @@ function executeCommand(command, options, onExit, isPrint) {
 }
 
 async function build_with_autodetect(project, projectType, compiler_version, daemon, autoStart, setupFile, isPrint) {
-
     if (!projectType) {
         projectType = await auto_detect(project);
     }
@@ -90,8 +90,10 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
     let anvil = null;
 
     if (!setupFile) {
-        console.log("Starting anvil...");
-        anvil = executeCommand('anvil', {}, () => { }, false);
+        console.log('Starting anvil...');
+        // dont't exit when some transactions failed
+        // anvil = executeCommand('anvil', {}, () => {}, false);
+        anvil = exec('anvil');
 
         process.on('SIGINT', () => {
             anvil.kill();
@@ -105,15 +107,17 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
         for (const fileName in offchainConfig) {
             for (const contractName in offchainConfig[fileName]) {
                 offchainConfig[fileName][contractName] = {
-                    "address": randomAddress(),
-                    "constructor_args": "0x"
-                }
+                    address: randomAddress(),
+                    constructor_args: '0x',
+                };
             }
         }
 
-        fs.writeFileSync("offchain_config.json", JSON.stringify(offchainConfig, null, 4));
+        fs.writeFileSync('offchain_config.json', JSON.stringify(offchainConfig, null, 4));
 
-        console.log("Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue");
+        console.log(
+            'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue',
+        );
 
         await new Promise((resolve) => {
             process.stdin.once('data', (chunk) => {
@@ -124,47 +128,51 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
         let artifacts = await deploy(results, offchainConfig);
 
         for (const artifact of artifacts) {
-            for (const fileName in artifact["address"]) {
-                for (const contractName in artifact["address"][fileName]) {
-                    if (offchainConfig.hasOwnProperty(fileName) && offchainConfig[fileName].hasOwnProperty(contractName) && artifact["address"][fileName][contractName]) {
-                        offchainConfig[fileName][contractName]["address"] = artifact["address"][fileName][contractName];
+            for (const fileName in artifact['address']) {
+                for (const contractName in artifact['address'][fileName]) {
+                    if (
+                        offchainConfig.hasOwnProperty(fileName) &&
+                        offchainConfig[fileName].hasOwnProperty(contractName) &&
+                        artifact['address'][fileName][contractName]
+                    ) {
+                        offchainConfig[fileName][contractName]['address'] = artifact['address'][fileName][contractName];
                     }
                 }
             }
         }
     }
 
-    const ityfuzzDir = "./.ityfuzz";
-    if (!fs.existsSync(ityfuzzDir)) {
-        fs.mkdirSync(ityfuzzDir);
-    }
-    
-    const artifactsFile = ityfuzzDir + "/artifacts_file.json"
-
-    fs.writeFileSync(artifactsFile, JSON.stringify(results, null, 4));
+    fs.writeFileSync('results.json', JSON.stringify(results, null, 4));
     visualize(results);
-    console.log(`Results written to ${artifactsFile}`);
+    console.log(`Results written to results.json`);
 
     if (autoStart) {
-        let command = "";
+        let command = '';
 
         if (setupFile) {
-            command = `ityfuzz evm --builder-artifacts-file ${artifactsFile} -t "a" --work-dir ${ityfuzzDir} --setup-file ${setupFile}`;
+            command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
         } else {
-            command = `ityfuzz evm --builder-artifacts-file ${artifactsFile} --offchain-config-file ./offchain_config.json -f -i -t "a" --work-dir ${ityfuzzDir}`;
+            command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -t "a" --work-dir ./workdir`;
         }
         console.log(`Starting ityfuzz with command: ${command}`);
 
+        handleBuildCoverage();
+
         // maxBuffer: 100MB
         const options = { maxBuffer: 1024 * 1024 * 100 };
-        executeCommand(command, options, (code) => {
-            console.log(`Child process exited with code ${code}`);
-            process.exit();
-        }, isPrint);
+        executeCommand(
+            command,
+            options,
+            (code) => {
+                console.log(`Child process exited with code ${code}`);
+                process.exit();
+            },
+            isPrint,
+        );
     }
 
     if (daemon) {
-        await new Promise(() => { });
+        await new Promise(() => {});
     }
 
     if (!setupFile) {
@@ -187,9 +195,17 @@ const argv = yargs(hideBin(process.argv))
         },
         async (argv) => {
             if (argv.project) {
-                await build_with_autodetect(argv.project, argv.projectType, argv.compilerVersion, argv.daemon, argv.autoStart, argv.setupFile, argv.printing);
+                await build_with_autodetect(
+                    argv.project,
+                    argv.projectType,
+                    argv.compilerVersion,
+                    argv.daemon,
+                    argv.autoStart,
+                    argv.setupFile,
+                    argv.printing,
+                );
             }
-        }
+        },
     )
     .option('project-type', {
         alias: 't',
@@ -223,5 +239,4 @@ const argv = yargs(hideBin(process.argv))
         default: false,
     })
     .demandOption(['project'], 'Please provide the project argument to proceed')
-    .help()
-    .argv;
+    .help().argv;

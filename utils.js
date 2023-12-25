@@ -1,52 +1,62 @@
 const axios = require('axios');
 const compare = require('hamming-distance');
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
 
 async function deployContract(bytecode, port) {
     const deployData = JSON.stringify({
         id: 1,
-        jsonrpc: "2.0",
-        method: "eth_sendTransaction",
-        params: [{
-            data: `0x${bytecode}`,
-            from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-            gas: "0x9716c0",
-            gasPrice: "0x9184e72a000",
-            value: "0x0"
-        }]
+        jsonrpc: '2.0',
+        method: 'eth_sendTransaction',
+        params: [
+            {
+                data: `0x${bytecode}`,
+                from: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+                gas: '0x9716c0',
+                gasPrice: '0x9184e72a000',
+                value: '0x0',
+            },
+        ],
     });
 
-    const deployResponse = await axios.post(`http://localhost:${port}`, deployData, {
-        headers: {
-            'content-type': 'application/json'
+    try {
+        const deployResponse = await axios.post(`http://localhost:${port}`, deployData, {
+            headers: {
+                'content-type': 'application/json',
+            },
+        });
+
+        if (!deployResponse.data || !deployResponse.data.result) {
+            console.log('Failed to deploy contract');
+            return [];
         }
-    });
 
-    if (!deployResponse.data || !deployResponse.data.result) {
-        console.log('Failed to deploy contract');
+        const txHash = deployResponse.data.result;
+
+        const traceData = JSON.stringify({
+            id: 2,
+            jsonrpc: '2.0',
+            method: 'trace_transaction',
+            params: [txHash],
+        });
+
+        const traceResponse = await axios.post(`http://localhost:${port}`, traceData, {
+            headers: {
+                'content-type': 'application/json',
+            },
+        });
+
+        if (!traceResponse.data || !traceResponse.data.result || traceResponse.data.result.length === 0) {
+            console.log('Failed to trace transaction');
+            return [];
+        }
+
+        return traceResponse.data.result;
+    } catch (e) {
+        console.log(e);
         return [];
     }
-
-    const txHash = deployResponse.data.result;
-
-    const traceData = JSON.stringify({
-        id: 2,
-        jsonrpc: "2.0",
-        method: "trace_transaction",
-        params: [txHash]
-    });
-
-    const traceResponse = await axios.post(`http://localhost:${port}`, traceData, {
-        headers: {
-            'content-type': 'application/json'
-        }
-    });
-
-    if (!traceResponse.data || !traceResponse.data.result || traceResponse.data.result.length === 0) {
-        console.log('Failed to trace transaction');
-        return [];
-    }
-
-    return traceResponse.data.result;
 }
 
 async function deploy(data, offchainConfig) {
@@ -65,8 +75,8 @@ async function deploy(data, offchainConfig) {
                     }
                     for (const result of results) {
                         bytecodeToAddress.push({
-                            "code": result.result.code,
-                            "address": result.result.address
+                            code: result.result.code,
+                            address: result.result.address,
                         });
                     }
                 }
@@ -79,7 +89,7 @@ async function deploy(data, offchainConfig) {
         for (const fileName in contracts) {
             for (const contractName in contracts[fileName]) {
                 let bytecode = contracts[fileName][contractName];
-                if (bytecode.startsWith("0x")) {
+                if (bytecode.startsWith('0x')) {
                     bytecode = bytecode.slice(2);
                 }
 
@@ -88,13 +98,13 @@ async function deploy(data, offchainConfig) {
 
                 for (const bytecodeAddress of bytecodeToAddress) {
                     let code = bytecodeAddress.code;
-                    if (code.startsWith("0x")) {
+                    if (code.startsWith('0x')) {
                         code = code.slice(2);
                     }
 
                     const lengthDifference = Math.abs(bytecode.length - code.length);
                     const maxLength = Math.max(bytecode.length, code.length);
-                    if (lengthDifference / maxLength <= 0.10) {
+                    if (lengthDifference / maxLength <= 0.1) {
                         const bytecodeBuffer = Buffer.from(bytecode, 'hex');
                         const codeBuffer = Buffer.from(code, 'hex');
 
@@ -104,10 +114,16 @@ async function deploy(data, offchainConfig) {
                         let paddedCodeBuffer = codeBuffer;
 
                         if (bytecodeBuffer.length < targetLength) {
-                            paddedBytecodeBuffer = Buffer.concat([bytecodeBuffer, Buffer.alloc(targetLength - bytecodeBuffer.length)]);
+                            paddedBytecodeBuffer = Buffer.concat([
+                                bytecodeBuffer,
+                                Buffer.alloc(targetLength - bytecodeBuffer.length),
+                            ]);
                         }
                         if (codeBuffer.length < targetLength) {
-                            paddedCodeBuffer = Buffer.concat([codeBuffer, Buffer.alloc(targetLength - codeBuffer.length)]);
+                            paddedCodeBuffer = Buffer.concat([
+                                codeBuffer,
+                                Buffer.alloc(targetLength - codeBuffer.length),
+                            ]);
                         }
 
                         const distance = compare(paddedBytecodeBuffer, paddedCodeBuffer);
@@ -119,13 +135,13 @@ async function deploy(data, offchainConfig) {
                 }
 
                 if (closestBytecodeAddress) {
-                    if (!data[i].hasOwnProperty("address")) {
-                        data[i]["address"] = {};
+                    if (!data[i].hasOwnProperty('address')) {
+                        data[i]['address'] = {};
                     }
-                    if (!data[i]["address"].hasOwnProperty(fileName)) {
-                        data[i]["address"][fileName] = {};
+                    if (!data[i]['address'].hasOwnProperty(fileName)) {
+                        data[i]['address'][fileName] = {};
                     }
-                    data[i]["address"][fileName][contractName] = closestBytecodeAddress.address;
+                    data[i]['address'][fileName][contractName] = closestBytecodeAddress.address;
                 }
             }
         }
@@ -135,14 +151,35 @@ async function deploy(data, offchainConfig) {
 }
 
 function randomAddress() {
-    let address = "0x";
+    let address = '0x';
     for (let i = 0; i < 40; i++) {
         address += Math.floor(Math.random() * 16).toString(16);
     }
     return address;
 }
 
+function hasYarn(cwd = process.cwd()) {
+    return fs.existsSync(path.resolve(cwd, 'yarn.lock'));
+}
+
+function hasPnpm(cwd = process.cwd()) {
+    return fs.existsSync(path.resolve(cwd, 'pnpm-lock.yaml'));
+}
+
+function checkSolcSelectInstalled() {
+    try {
+        execSync('solc-select versions');
+        return true;
+    } catch (error) {
+        console.log(error.message);
+        return false;
+    }
+}
+
 module.exports = {
     randomAddress,
-    deploy
-}
+    deploy,
+    hasYarn,
+    hasPnpm,
+    checkSolcSelectInstalled,
+};
