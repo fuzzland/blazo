@@ -77,7 +77,15 @@ function executeCommand(command, options, onExit, isPrint) {
     }
 }
 
-async function build_with_autodetect(project, projectType, compiler_version, daemon, autoStart, setupFile, isPrint) {
+async function build_with_autodetect(
+    project,
+    projectType,
+    compiler_version,
+    daemon,
+    autoStart,
+    setupFile,
+    isPrint
+) {
     if (!projectType) {
         projectType = await auto_detect(project);
     }
@@ -114,14 +122,17 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
             }
         }
 
-        fs.writeFileSync('offchain_config.json', JSON.stringify(offchainConfig, null, 4));
+        fs.writeFileSync(
+            'offchain_config.json',
+            JSON.stringify(offchainConfig, null, 4)
+        );
 
         console.log(
-            'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue',
+            'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue'
         );
 
         await new Promise((resolve) => {
-            process.stdin.once('data', (chunk) => {
+            process.stdin.once('data', () => {
                 resolve();
             });
         });
@@ -136,7 +147,8 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
                         offchainConfig[fileName].hasOwnProperty(contractName) &&
                         artifact['address'][fileName][contractName]
                     ) {
-                        offchainConfig[fileName][contractName]['address'] = artifact['address'][fileName][contractName];
+                        offchainConfig[fileName][contractName]['address'] =
+                            artifact['address'][fileName][contractName];
                     }
                 }
             }
@@ -168,7 +180,7 @@ async function build_with_autodetect(project, projectType, compiler_version, dae
                 console.log(`Child process exited with code ${code}`);
                 process.exit();
             },
-            isPrint,
+            isPrint
         );
     }
 
@@ -194,7 +206,10 @@ const argv = yargs(hideBin(process.argv))
                     describe: 'Name of the project to build',
                     type: 'string',
                 })
-                .demandOption(['project'], 'Please provide the project argument to proceed');
+                .demandOption(
+                    ['project'],
+                    'Please provide the project argument to proceed'
+                );
         },
         async (argv) => {
             if (argv.project) {
@@ -205,10 +220,10 @@ const argv = yargs(hideBin(process.argv))
                     argv.daemon,
                     argv.autoStart,
                     argv.setupFile,
-                    argv.printing,
+                    argv.printing
                 );
             }
-        },
+        }
     )
     .option('project-type', {
         alias: 't',
@@ -247,14 +262,16 @@ const argv = yargs(hideBin(process.argv))
         (yargs) => {
             yargs
                 .positional('type', {
-                    describe: 'Type of the project to create (offchain/onchain)',
+                    describe:
+                        'Type of the project to create (offchain/onchain)',
                     type: 'string',
                     choices: ['offchain', 'onchain'],
                 })
                 .option('contract-addresses', {
                     alias: 't',
                     type: 'string',
-                    description: 'Contract addresses for onchain type (Multiple comma-separated)',
+                    description:
+                        'Contract addresses for onchain type (Multiple comma-separated)',
                 })
                 .option('chain', {
                     alias: 'n',
@@ -284,10 +301,18 @@ const argv = yargs(hideBin(process.argv))
         },
         async (argv) => {
             if (argv.type === 'onchain') {
-                createOnchain(argv.type, argv.contractAddresses, argv.chain, argv.blockNumber);
+                createOnchain(
+                    argv.contractAddresses,
+                    argv.chain,
+                    argv.blockNumber
+                );
             } else if (argv.type === 'offchain') {
-                createOffchain(argv.file, argv.projectType, argv.compilerVersion);
+                createOffchain(
+                    argv.file,
+                    argv.projectType,
+                    argv.compilerVersion
+                );
             }
-        },
+        }
     )
     .help().argv;
