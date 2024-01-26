@@ -3,6 +3,7 @@ const compare = require('hamming-distance');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const chalk = require('chalk');
 
 async function deployContract(bytecode, port) {
     const deployData = JSON.stringify({
@@ -176,10 +177,29 @@ function checkSolcSelectInstalled() {
     }
 }
 
+const logger = {
+    error(...args) {
+        console.log(chalk.red(...args));
+    },
+    warn(...args) {
+        console.log(chalk.yellow(...args));
+    },
+    info(...args) {
+        console.log(chalk.cyan(...args));
+    },
+    success(...args) {
+        console.log(chalk.green(...args));
+    },
+    break() {
+        console.log('');
+    },
+};
+
 module.exports = {
     randomAddress,
     deploy,
     hasYarn,
     hasPnpm,
     checkSolcSelectInstalled,
+    logger,
 };

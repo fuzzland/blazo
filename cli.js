@@ -8,6 +8,7 @@ const { exec, spawn } = require('child_process');
 const { randomAddress } = require('./utils');
 const { deploy } = require('./utils');
 const { handleBuildCoverage } = require('./coverage');
+const { createOffchain, createOnchain } = require('./task');
 
 function visualize(results) {
     let data = [['File', 'Contract Name', 'Functions Can Get Fuzzed']];
@@ -188,10 +189,12 @@ const argv = yargs(hideBin(process.argv))
         '$0 <project>',
         'Build a project',
         (yargs) => {
-            yargs.positional('project', {
-                describe: 'Name of the project to build',
-                type: 'string',
-            });
+            yargs
+                .positional('project', {
+                    describe: 'Name of the project to build',
+                    type: 'string',
+                })
+                .demandOption(['project'], 'Please provide the project argument to proceed');
         },
         async (argv) => {
             if (argv.project) {
@@ -238,5 +241,53 @@ const argv = yargs(hideBin(process.argv))
         description: 'Print the output in real-time if true',
         default: false,
     })
-    .demandOption(['project'], 'Please provide the project argument to proceed')
+    .command(
+        'create <type>',
+        'Create a project type',
+        (yargs) => {
+            yargs
+                .positional('type', {
+                    describe: 'Type of the project to create (offchain/onchain)',
+                    type: 'string',
+                    choices: ['offchain', 'onchain'],
+                })
+                .option('contract-addresses', {
+                    alias: 't',
+                    type: 'string',
+                    description: 'Contract addresses for onchain type (Multiple comma-separated)',
+                })
+                .option('chain', {
+                    alias: 'n',
+                    type: 'string',
+                    description: 'Chain for onchain type (e.g., ETH)',
+                })
+                .option('block-number', {
+                    alias: 'b',
+                    type: 'number',
+                    description: 'Block number for onchain type',
+                })
+                .option('project-type', {
+                    alias: 'p',
+                    type: 'string',
+                    description: 'Type of the project for offchain',
+                })
+                .option('file', {
+                    alias: 'f',
+                    type: 'string',
+                    description: 'File path for offchain',
+                })
+                .option('compiler-version', {
+                    alias: 'c',
+                    type: 'string',
+                    description: 'Compiler version for offchain',
+                });
+        },
+        async (argv) => {
+            if (argv.type === 'onchain') {
+                createOnchain(argv.type, argv.contractAddresses, argv.chain, argv.blockNumber);
+            } else if (argv.type === 'offchain') {
+                createOffchain(argv.file, argv.projectType, argv.compilerVersion);
+            }
+        },
+    )
     .help().argv;

@@ -41,11 +41,32 @@ EXAMPLES
   $ blazo ./ -s
 ```
 
+```
+USAGE
+  $ blazo create <type>
+
+OPTIONS
+  -n, --chain                 Chain for onchain type (e.g., ETH)
+  -b, --block-number          Block number for onchain type
+  -t, --contract-addresses    Contract addresses for onchain type (Multiple comma-separated)
+  -p, --project-type          Type of the project for offchain
+  -f, --file                  File path for offchain
+  -c, --compiler-version      Compiler version for offchain
+```
+
+If you are going to create a task from local, you need to set up your **BLAZ_API_KEY** as an environment variable. You can get the API key from https://blaz.ai/account/apikeys
+
+```sh-session
+$ export BLAZ_API_KEY=YOUR_BLAZ_API_KEY
+$ blazo create offchain ./ -c v0.8.21+commit.d9974bed
+```
+
 ## Features
 
 - Support for hardhat and foundry projects
 - Use native compiler and support compilation caching
 - Generate coverage html
+- Create task from local
 
 ## Outputs
 
