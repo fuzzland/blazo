@@ -79,6 +79,10 @@ async function handle_multi_build(task_dir, compiler_version, resolve) {
     let build_sources = {};
 
     for (let file of files) {
+        let is_dir = fs.lstatSync(file).isDirectory();
+        if (is_dir) {
+            continue;
+        }
         let content = fs.readFileSync(file, 'utf8');
         build_sources[file] = { content };
     }
