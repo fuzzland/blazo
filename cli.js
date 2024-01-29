@@ -5,10 +5,10 @@ const { hideBin } = require('yargs/helpers');
 const fs = require('fs');
 const { table } = require('table');
 const { exec, spawn } = require('child_process');
-const { randomAddress } = require('./utils');
-const { deploy } = require('./utils');
+const { randomAddress, getAPIKey } = require('./utils');
 const { handleBuildCoverage } = require('./coverage');
 const { createOffchain, createOnchain } = require('./task');
+const inquirer = require('inquirer');
 
 function visualize(results) {
     let data = [['File', 'Contract Name', 'Functions Can Get Fuzzed']];
@@ -18,7 +18,7 @@ function visualize(results) {
     }
     let result = results[0];
     for (let contract_file_name of Object.keys(result.abi)) {
-        if (contract_file_name.startsWith("lib/")) {
+        if (contract_file_name.startsWith('lib/')) {
             continue;
         }
 
@@ -81,13 +81,52 @@ function executeCommand(command, options, onExit, isPrint) {
     }
 }
 
+// TODO: when process exit or timeout, create offchain task and update TaskResult
+function startFuzzWithSetupFile(setupFile, isPrint) {
+    const options = { maxBuffer: 1024 * 1024 * 100 };
+    const command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
+    executeCommand(
+        command,
+        options,
+        (code) => {
+            console.log(`Child process exited with code ${code}`);
+            handleBuildCoverage();
+            process.exit();
+        },
+        isPrint
+    );
+}
+
+// TODO: when process exit or timeout, create offchain task and update TaskResult
+function startFuzzWithOffchainConfig(configFile, isPrint) {
+    const options = { maxBuffer: 1024 * 1024 * 100 };
+    const command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ${configFile} -f -t "a" --work-dir ./workdir`;
+    executeCommand(
+        command,
+        options,
+        (code) => {
+            console.log(`Child process exited with code ${code}`);
+            handleBuildCoverage();
+            process.exit();
+        },
+        isPrint
+    );
+}
+
+// TODO: start blaz service(create task, update taskResult)
+function startBlaz() {
+    //
+}
+
 async function build_with_autodetect(
     project,
     projectType,
     compiler_version,
     autoStart,
     setupFile,
-    isPrint
+    offchainConfig,
+    isPrint,
+    blaz
 ) {
     if (!projectType) {
         projectType = await auto_detect(project);
@@ -122,6 +161,8 @@ async function build_with_autodetect(
         console.log(
             'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts.'
         );
+    } else {
+        startFuzzWithSetupFile(setupFile, isPrint);
     }
 
     fs.writeFileSync('results.json', JSON.stringify(results, null, 4));
@@ -153,8 +194,58 @@ async function build_with_autodetect(
         );
     }
 
-    if (!autoStart) {
-        process.exit();
+    // No setup file/offchain config
+    if (!setupFile && !offchainConfig) {
+        const { choice } = await inquirer.prompt({
+            type: 'list',
+            name: 'choice',
+            message: 'Please select the option you want to use:',
+            choices: ['Setup File', 'Offchain Config'],
+        });
+
+        if (choice === 'Setup File') {
+            console.log('Setup File');
+            const { setup_file_path } = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'file_path',
+                    message: 'Input setup file:',
+                },
+            ]);
+            startFuzzWithSetupFile(setup_file_path, isPrint);
+        } else if (choice === 'Offchain Config') {
+            console.log('Offchain config');
+            const { file_path } = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'file_path',
+                    message:
+                        'Select the offchain config file, if no value is provided, the generated configuration will be selected:',
+                },
+            ]);
+
+            const offchainConfig = fs.readFileSync(
+                file_path || 'offchain_config.json',
+                'utf8'
+            );
+
+            startFuzzWithOffchainConfig();
+
+            // TODO: need to upload contracts(results.json) for clone flow?
+            await createOffchain('', projectType, offchainConfig, 0);
+
+            // TODO: copy faas fuzz_manager logic below, update status when task error or completed
+            // also save workdir results to TaskResult
+            function updateTaskResult() {
+                //
+            }
+        }
+    }
+
+    // Run blaz services, create task
+    if (blaz) {
+        const API_KEY = await getAPIKey();
+        console.log('API_KEY', API_KEY);
     }
 }
 
@@ -181,7 +272,9 @@ const argv = yargs(hideBin(process.argv))
                     argv.compilerVersion,
                     argv.autoStart,
                     argv.setupFile,
-                    argv.printing
+                    argv.offchainConfig,
+                    argv.printing,
+                    argv.blaz
                 );
             }
         }
@@ -201,10 +294,20 @@ const argv = yargs(hideBin(process.argv))
         type: 'boolean',
         description: 'Automatically run ityfuzz after building',
     })
+    .option('blaz', {
+        alias: 'b',
+        type: 'boolean',
+        description: 'Automatically run blaz services, create task',
+    })
     .option('setup-file', {
         alias: 'f',
         type: 'string',
         description: 'Specify the setup file to use',
+    })
+    .option('offchain-config', {
+        alias: '-o',
+        type: 'string',
+        description: 'Specify the config file to use',
     })
     .option('printing', {
         alias: 'p',
@@ -213,62 +316,10 @@ const argv = yargs(hideBin(process.argv))
         default: false,
     })
     .command(
-        'create <type>',
-        'Create a project type',
-        (yargs) => {
-            yargs
-                .positional('type', {
-                    describe:
-                        'Type of the project to create (offchain/onchain)',
-                    type: 'string',
-                    choices: ['offchain', 'onchain'],
-                })
-                .option('contract-addresses', {
-                    alias: 't',
-                    type: 'string',
-                    description:
-                        'Contract addresses for onchain type (Multiple comma-separated)',
-                })
-                .option('chain', {
-                    alias: 'n',
-                    type: 'string',
-                    description: 'Chain for onchain type (e.g., ETH)',
-                })
-                .option('block-number', {
-                    alias: 'b',
-                    type: 'number',
-                    description: 'Block number for onchain type',
-                })
-                .option('project-type', {
-                    alias: 'p',
-                    type: 'string',
-                    description: 'Type of the project for offchain',
-                })
-                .option('file', {
-                    alias: 'f',
-                    type: 'string',
-                    description: 'File path for offchain',
-                })
-                .option('compiler-version', {
-                    alias: 'c',
-                    type: 'string',
-                    description: 'Compiler version for offchain',
-                });
-        },
-        async (argv) => {
-            if (argv.type === 'onchain') {
-                createOnchain(
-                    argv.contractAddresses,
-                    argv.chain,
-                    argv.blockNumber
-                );
-            } else if (argv.type === 'offchain') {
-                createOffchain(
-                    argv.file,
-                    argv.projectType,
-                    argv.compilerVersion
-                );
-            }
+        'configure',
+        'Configure CLI options, the values you provide will be written to file (~/.blazo)',
+        async () => {
+            await getAPIKey();
         }
     )
     .help().argv;

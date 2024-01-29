@@ -1,24 +1,34 @@
+const os = require('os');
+const path = require('path');
+
+const BLAZO_PATH = path.join(os.homedir(), '.blazo');
+
 const INVARIANTS_ITEMS = {
     'Common Vulnerabilities': [
         {
             name: 'Balance Extraction',
-            description: 'Detect whether the attackers can steal ETH / native tokens from the contract.',
+            description:
+                'Detect whether the attackers can steal ETH / native tokens from the contract.',
         },
         {
             name: 'Token Extraction',
-            description: 'Detect whether the attackers can steal ERC20 / ERC721 tokens from the contract.',
+            description:
+                'Detect whether the attackers can steal ERC20 / ERC721 tokens from the contract.',
         },
         {
             name: 'Uniswap Pair Issues',
-            description: 'Identify misuse of Uniswap pair that could lead to price manipulation attacks.',
+            description:
+                'Identify misuse of Uniswap pair that could lead to price manipulation attacks.',
         },
         {
             name: 'ChainLink Issues',
-            description: 'Identify misuse of Chainlink that could lead to a range of different attacks.',
+            description:
+                'Identify misuse of Chainlink that could lead to a range of different attacks.',
         },
         {
             name: 'Arbitrary Selfdestruct',
-            description: 'Detect whether the attackers can make contract self-destruct.',
+            description:
+                'Detect whether the attackers can make contract self-destruct.',
         },
     ],
     'Custom Invariants': [
@@ -45,4 +55,5 @@ const INVARIANTS_ITEMS = {
 
 module.exports = {
     INVARIANTS_ITEMS,
+    BLAZO_PATH,
 };

@@ -11,7 +11,12 @@ const BLAZ_API_KEY = process.env.BLAZ_API_KEY;
 const BUILDER_BASE_URL = 'https://solc-builder.dev.infra.fuzz.land';
 const BLAZ_BASE_URL = 'https://blaz.dev.infra.fuzz.land';
 
-async function handleCreateTask(buildResult, projectType, offchainConfig) {
+async function createOffchain(
+    buildResult,
+    projectType,
+    offchainConfig,
+    status = 0
+) {
     const invariants = Object.keys(INVARIANTS_ITEMS)
         .map((category) => INVARIANTS_ITEMS[category].map((slot) => slot.name))
         .flat();
@@ -34,7 +39,7 @@ async function handleCreateTask(buildResult, projectType, offchainConfig) {
                 n_cpus: 1,
                 liquidity_pools_definition: [],
                 token_price: [],
-                status: 0, // TaskStatus.UNSTARTED
+                status,
                 upload_type: 0,
             },
             {
@@ -55,144 +60,144 @@ async function handleCreateTask(buildResult, projectType, offchainConfig) {
         });
 }
 
-async function createOffchain(projectPath, projectType, compilerVersion) {
-    if (!BLAZ_API_KEY) {
-        logger.error(
-            'Please setup your API token, you can get the token from https://blaz.ai/account/apikeys.'
-        );
-        process.exit(1);
-    }
-    if (!compilerVersion) {
-        logger.error('Compiler version not specified');
-        process.exit(1);
-    }
-    if (!projectType) {
-        projectType = await auto_detect(projectPath);
-    }
+// async function createOffchain(projectPath, projectType, compilerVersion) {
+//     if (!BLAZ_API_KEY) {
+//         logger.error(
+//             'Please setup your API token, you can get the token from https://blaz.ai/account/apikeys.'
+//         );
+//         process.exit(1);
+//     }
+//     if (!compilerVersion) {
+//         logger.error('Compiler version not specified');
+//         process.exit(1);
+//     }
+//     if (!projectType) {
+//         projectType = await auto_detect(projectPath);
+//     }
 
-    //  create a file to stream archive data to
-    const output = fs.createWriteStream(path.join('output.zip'));
-    const archive = archiver('zip', {
-        zlib: { level: 9 },
-    });
+//     //  create a file to stream archive data to
+//     const output = fs.createWriteStream(path.join('output.zip'));
+//     const archive = archiver('zip', {
+//         zlib: { level: 9 },
+//     });
 
-    // listen for all archive data to be written
-    output.on('close', async () => {
-        logger.info('ZIP file created:', archive.pointer(), 'total bytes');
+//     // listen for all archive data to be written
+//     output.on('close', async () => {
+//         logger.info('ZIP file created:', archive.pointer(), 'total bytes');
 
-        try {
-            // upload zip files
-            const formData = new FormData();
-            formData.append(
-                'file',
-                fs.createReadStream(path.join('output.zip'))
-            );
+//         try {
+//             // upload zip files
+//             const formData = new FormData();
+//             formData.append(
+//                 'file',
+//                 fs.createReadStream(path.join('output.zip'))
+//             );
 
-            const {
-                data: { task_id },
-            } = await axios.post(
-                `${BUILDER_BASE_URL}/build/${projectType}`,
-                formData,
-                {
-                    params: {
-                        compiler_version: compilerVersion,
-                        needs: 'sourcemap,bytecode,abi,sources,invariants,compiler_args,ast',
-                    },
-                    headers: formData.getHeaders(),
-                }
-            );
-            logger.info(`Project uploaded successfully`);
+//             const {
+//                 data: { task_id },
+//             } = await axios.post(
+//                 `${BUILDER_BASE_URL}/build/${projectType}`,
+//                 formData,
+//                 {
+//                     params: {
+//                         compiler_version: compilerVersion,
+//                         needs: 'sourcemap,bytecode,abi,sources,invariants,compiler_args,ast',
+//                     },
+//                     headers: formData.getHeaders(),
+//                 }
+//             );
+//             logger.info(`Project uploaded successfully`);
 
-            // get builder results, wait for status update to done
-            async function handleLoadBuilderResult(attempts = 0) {
-                if (attempts > 200) {
-                    logger.error(
-                        'Exceeded maximum number of attempts, cannot get builder results.'
-                    );
-                    process.exit(1);
-                }
-                return await axios
-                    .get(`${BUILDER_BASE_URL}/task/${task_id}`)
-                    .then((response) => {
-                        const data = response.data;
-                        if (data.status === 'done') {
-                            return data;
-                        } else {
-                            return new Promise((resolve) => {
-                                setTimeout(
-                                    () =>
-                                        resolve(
-                                            handleLoadBuilderResult(
-                                                attempts + 1
-                                            )
-                                        ),
-                                    1000
-                                );
-                            });
-                        }
-                    })
-                    .catch((error) => {
-                        logger.error('Error:', error);
-                    });
-            }
-            logger.info(`Waiting taskID: ${task_id} for build to start...`);
-            const { results } = await handleLoadBuilderResult();
+//             // get builder results, wait for status update to done
+//             async function handleLoadBuilderResult(attempts = 0) {
+//                 if (attempts > 200) {
+//                     logger.error(
+//                         'Exceeded maximum number of attempts, cannot get builder results.'
+//                     );
+//                     process.exit(1);
+//                 }
+//                 return await axios
+//                     .get(`${BUILDER_BASE_URL}/task/${task_id}`)
+//                     .then((response) => {
+//                         const data = response.data;
+//                         if (data.status === 'done') {
+//                             return data;
+//                         } else {
+//                             return new Promise((resolve) => {
+//                                 setTimeout(
+//                                     () =>
+//                                         resolve(
+//                                             handleLoadBuilderResult(
+//                                                 attempts + 1
+//                                             )
+//                                         ),
+//                                     1000
+//                                 );
+//                             });
+//                         }
+//                     })
+//                     .catch((error) => {
+//                         logger.error('Error:', error);
+//                     });
+//             }
+//             logger.info(`Waiting taskID: ${task_id} for build to start...`);
+//             const { results } = await handleLoadBuilderResult();
 
-            // get results json from GCP or get results json from local?
-            const { data: result_json } = await axios.get(results);
-            logger.info(`Load builder results`);
+//             // get results json from GCP or get results json from local?
+//             const { data: result_json } = await axios.get(results);
+//             logger.info(`Load builder results`);
 
-            // create offchain config
-            let offchainConfig = result_json.reduce((acc, item) => {
-                const deepClonedItem = JSON.parse(JSON.stringify(item.abi));
-                return { ...acc, ...deepClonedItem };
-            }, {});
+//             // create offchain config
+//             let offchainConfig = result_json.reduce((acc, item) => {
+//                 const deepClonedItem = JSON.parse(JSON.stringify(item.abi));
+//                 return { ...acc, ...deepClonedItem };
+//             }, {});
 
-            for (const fileName in offchainConfig) {
-                for (const contractName in offchainConfig[fileName]) {
-                    offchainConfig[fileName][contractName] = {
-                        address: randomAddress(),
-                        constructor_args: '0x',
-                    };
-                }
-            }
+//             for (const fileName in offchainConfig) {
+//                 for (const contractName in offchainConfig[fileName]) {
+//                     offchainConfig[fileName][contractName] = {
+//                         address: randomAddress(),
+//                         constructor_args: '0x',
+//                     };
+//                 }
+//             }
 
-            fs.writeFileSync(
-                'offchain_config.json',
-                JSON.stringify(offchainConfig, null, 4)
-            );
+//             fs.writeFileSync(
+//                 'offchain_config.json',
+//                 JSON.stringify(offchainConfig, null, 4)
+//             );
 
-            logger.info(
-                'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue'
-            );
+//             logger.info(
+//                 'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue'
+//             );
 
-            // update offchain config
-            await new Promise((resolve) => {
-                process.stdin.once('data', () => {
-                    offchainConfig = fs.readFileSync(
-                        'offchain_config.json',
-                        'utf8'
-                    );
-                    resolve();
-                });
-            });
-            handleCreateTask(results, projectType, offchainConfig);
-        } catch (error) {
-            logger.error('Failed to upload file:', error.message);
-        }
-    });
-    archive.on('error', function (err) {
-        throw err;
-    });
-    // pipe archive data to the file
-    archive.pipe(output);
-    // append files from a sub-directory, putting its contents at the root of archive
-    archive.directory(projectPath, false);
-    // finalize the archive (ie we are done appending files but streams have to finish yet)
-    archive.finalize();
-}
+//             // update offchain config
+//             await new Promise((resolve) => {
+//                 process.stdin.once('data', () => {
+//                     offchainConfig = fs.readFileSync(
+//                         'offchain_config.json',
+//                         'utf8'
+//                     );
+//                     resolve();
+//                 });
+//             });
+//             handleCreateTask(results, projectType, offchainConfig);
+//         } catch (error) {
+//             logger.error('Failed to upload file:', error.message);
+//         }
+//     });
+//     archive.on('error', function (err) {
+//         throw err;
+//     });
+//     // pipe archive data to the file
+//     archive.pipe(output);
+//     // append files from a sub-directory, putting its contents at the root of archive
+//     archive.directory(projectPath, false);
+//     // finalize the archive (ie we are done appending files but streams have to finish yet)
+//     archive.finalize();
+// }
 
-async function createOnchain(type, contractAddress, chain, blockNumber) {
+async function createOnchain(contractAddress, chain, blockNumber) {
     const invariants = Object.keys(INVARIANTS_ITEMS)
         .map((category) => INVARIANTS_ITEMS[category].map((slot) => slot.name))
         .flat();
@@ -236,6 +241,7 @@ async function createOnchain(type, contractAddress, chain, blockNumber) {
         logger.error('Error while creating onchain task:', error.message);
     }
 }
+
 module.exports = {
     createOffchain,
     createOnchain,
