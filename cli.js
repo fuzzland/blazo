@@ -18,6 +18,10 @@ function visualize(results) {
     }
     let result = results[0];
     for (let contract_file_name of Object.keys(result.abi)) {
+        if (contract_file_name.startsWith("lib/")) {
+            continue;
+        }
+
         let contract = result.abi[contract_file_name];
         for (let name of Object.keys(contract)) {
             let abis = contract[name];
@@ -38,15 +42,15 @@ function executeCommand(command, options, onExit, isPrint) {
         const childProcess = spawn(cmd, args, options);
 
         childProcess.stdout.on('data', (data) => {
-            console.log(`stdout: ${data}`);
+            console.log(`${data}`);
         });
 
         childProcess.stderr.on('data', (data) => {
-            console.error(`stderr: ${data}`);
+            console.error(`${data}`);
         });
 
         childProcess.on('error', (error) => {
-            console.error(`error: ${error}`);
+            console.error(`${error}`);
             process.exit(1);
         });
 
@@ -65,7 +69,7 @@ function executeCommand(command, options, onExit, isPrint) {
             if (stderr) {
                 console.error(`stderr: ${stderr}`);
             }
-            console.log(`stdout: ${stdout}`);
+            console.log(`${stdout}`);
             onExit(0); // Assuming success, you might want to adjust this based on your use case
         });
         process.on('SIGINT', () => {
@@ -81,7 +85,6 @@ async function build_with_autodetect(
     project,
     projectType,
     compiler_version,
-    daemon,
     autoStart,
     setupFile,
     isPrint
@@ -96,18 +99,7 @@ async function build_with_autodetect(
         results = [results];
     }
 
-    let anvil = null;
-
     if (!setupFile) {
-        console.log('Starting anvil...');
-        // dont't exit when some transactions failed
-        // anvil = executeCommand('anvil', {}, () => {}, false);
-        anvil = exec('anvil');
-
-        process.on('SIGINT', () => {
-            anvil.kill();
-        });
-
         let offchainConfig = results.reduce((acc, item) => {
             const deepClonedItem = JSON.parse(JSON.stringify(item.abi));
             return { ...acc, ...deepClonedItem };
@@ -128,31 +120,8 @@ async function build_with_autodetect(
         );
 
         console.log(
-            'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts and press enter to continue'
+            'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts.'
         );
-
-        await new Promise((resolve) => {
-            process.stdin.once('data', () => {
-                resolve();
-            });
-        });
-
-        let artifacts = await deploy(results, offchainConfig);
-
-        for (const artifact of artifacts) {
-            for (const fileName in artifact['address']) {
-                for (const contractName in artifact['address'][fileName]) {
-                    if (
-                        offchainConfig.hasOwnProperty(fileName) &&
-                        offchainConfig[fileName].hasOwnProperty(contractName) &&
-                        artifact['address'][fileName][contractName]
-                    ) {
-                        offchainConfig[fileName][contractName]['address'] =
-                            artifact['address'][fileName][contractName];
-                    }
-                }
-            }
-        }
     }
 
     fs.writeFileSync('results.json', JSON.stringify(results, null, 4));
@@ -184,14 +153,7 @@ async function build_with_autodetect(
         );
     }
 
-    if (daemon) {
-        await new Promise(() => {});
-    }
-
-    if (!setupFile) {
-        anvil.kill();
-    }
-    if (!autoStart && !daemon) {
+    if (!autoStart) {
         process.exit();
     }
 }
@@ -217,7 +179,6 @@ const argv = yargs(hideBin(process.argv))
                     argv.project,
                     argv.projectType,
                     argv.compilerVersion,
-                    argv.daemon,
                     argv.autoStart,
                     argv.setupFile,
                     argv.printing
@@ -234,11 +195,6 @@ const argv = yargs(hideBin(process.argv))
         alias: 'c',
         type: 'string',
         description: 'Specify the compiler version to use',
-    })
-    .option('daemon', {
-        alias: 'd',
-        type: 'boolean',
-        description: 'Run in daemon mode',
     })
     .option('auto-start', {
         alias: 's',
