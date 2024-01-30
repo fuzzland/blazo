@@ -86,38 +86,29 @@ function executeCommand(command, options, onExit, isPrint) {
     }
 }
 
-function startFuzzWithSetupFile(setupFile, isPrint) {
+function startFuzz(setupFile, configFile, isPrint) {
+    let command = '';
+    if (setupFile) {
+        command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
+    } else {
+        command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ${configFile} -f -t "a" --work-dir ./workdir`;
+    }
+    console.log(`Starting ityfuzz with command: ${command}`);
+    handleBuildCoverage();
+
     const options = { maxBuffer: 1024 * 1024 * 100 };
-    const command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
-    console.log(command);
     executeCommand(
         command,
         options,
         (code) => {
             console.log(`Child process exited with code ${code}`);
-            handleBuildCoverage();
             process.exit();
         },
         isPrint
     );
 }
 
-function startFuzzWithOffchainConfig(configFile, isPrint) {
-    const options = { maxBuffer: 1024 * 1024 * 100 };
-    const command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ${configFile} -f -t "a" --work-dir ./workdir`;
-    console.log(command);
-    executeCommand(
-        command,
-        options,
-        (code) => {
-            console.log(`Child process exited with code ${code}`);
-            handleBuildCoverage();
-            process.exit();
-        },
-        isPrint
-    );
-}
-
+// TODO: check offchain config is valid
 function getOffchainConfig(results) {
     let offchainConfig = results.reduce((acc, item) => {
         const deepClonedItem = JSON.parse(JSON.stringify(item.abi));
@@ -171,7 +162,7 @@ async function build_with_autodetect(
             'Offchain config written to offchain_config.json, please edit it to specify the addresses of the contracts.'
         );
     } else {
-        startFuzzWithSetupFile(setupFile, isPrint);
+        startFuzz(setupFile, '', isPrint);
         if (blaz) {
             const buildResultUrl = await uploadBuildResult('results.json');
             await createOffchain(
@@ -186,7 +177,7 @@ async function build_with_autodetect(
     if (offchainConfigPath) {
         const isExist = checkFileExists(offchainConfigPath);
         if (!isExist) return;
-        startFuzzWithOffchainConfig(offchainConfigPath, isPrint);
+        startFuzz('', offchainConfigPath, isPrint);
         if (blaz) {
             const buildResultUrl = await uploadBuildResult('results.json');
             const offchainConfig = fs.readFileSync(offchainConfigPath, 'utf8');
@@ -199,32 +190,11 @@ async function build_with_autodetect(
     console.log(`Results written to results.json`);
 
     if (autoStart) {
-        let command = '';
-
-        if (setupFile) {
-            command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
-        } else {
-            command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ./offchain_config.json -f -t "a" --work-dir ./workdir`;
-        }
-        console.log(`Starting ityfuzz with command: ${command}`);
-
-        handleBuildCoverage();
-
-        // maxBuffer: 100MB
-        const options = { maxBuffer: 1024 * 1024 * 100 };
-        executeCommand(
-            command,
-            options,
-            (code) => {
-                console.log(`Child process exited with code ${code}`);
-                process.exit();
-            },
-            isPrint
-        );
+        startFuzz(setupFile, 'offchain_config.json', isPrint);
     }
 
     // No setup file/offchain config, select the mode of operation manually
-    if (!setupFile && !offchainConfigPath) {
+    if (!setupFile && !offchainConfigPath && !autoStart) {
         const { choice } = await inquirer.prompt({
             type: 'list',
             name: 'choice',
@@ -268,7 +238,7 @@ async function build_with_autodetect(
             }
             const setupFile = setupType.customContract || setupType.contract;
 
-            startFuzzWithSetupFile(setupFile, isPrint);
+            startFuzz(setupFile, '', isPrint);
 
             if (blaz) {
                 const buildResultUrl = await uploadBuildResult('results.json');
@@ -305,7 +275,7 @@ async function build_with_autodetect(
                     offchainConfig
                 );
             }
-            startFuzzWithOffchainConfig(offchainConfigPath, isPrint);
+            startFuzz('', offchainConfigPath, isPrint);
         }
     }
 }
