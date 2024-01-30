@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { logger, getAPIKey } = require('./utils');
 const { INVARIANTS_ITEMS } = require('./constant');
 
-const BLAZ_BASE_URL = 'https://blaz.dev.infra.fuzz.land';
+const BLAZ_BASE_URL = 'https://blaz.infra.fuzz.land';
 
 async function createOffchain(
     buildResultUrl,
@@ -46,10 +46,14 @@ async function createOffchain(
                 },
             }
         )
-        .then(({ data: { id } }) => {
-            logger.info(
-                `Created offchain task successfully, You can check the task detial at https://blaz.ai/project/${id}`
-            );
+        .then(({ data: { id, status, message } }) => {
+            if (status === 'success') {
+                logger.info(
+                    `Created offchain task successfully, you can check the task detial at https://blaz.ai/project/${id}`
+                );
+            } else {
+                logger.error('Failed to create offchain task:', message);
+            }
         })
         .catch((err) => {
             logger.info(err.message);
