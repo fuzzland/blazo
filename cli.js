@@ -5,9 +5,14 @@ const { hideBin } = require('yargs/helpers');
 const fs = require('fs');
 const { table } = require('table');
 const { exec, spawn } = require('child_process');
-const { randomAddress, getAPIKey } = require('./utils');
+const {
+    randomAddress,
+    getAPIKey,
+    logger,
+    checkFileExists,
+} = require('./utils');
 const { handleBuildCoverage } = require('./coverage');
-const { createOffchain, createOnchain } = require('./task');
+const { createOffchain, createOnchain, uploadBuildResult } = require('./task');
 const inquirer = require('inquirer');
 
 function visualize(results) {
@@ -81,7 +86,6 @@ function executeCommand(command, options, onExit, isPrint) {
     }
 }
 
-// TODO: when process exit or timeout, create offchain task and update TaskResult
 function startFuzzWithSetupFile(setupFile, isPrint) {
     const options = { maxBuffer: 1024 * 1024 * 100 };
     const command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
@@ -97,7 +101,6 @@ function startFuzzWithSetupFile(setupFile, isPrint) {
     );
 }
 
-// TODO: when process exit or timeout, create offchain task and update TaskResult
 function startFuzzWithOffchainConfig(configFile, isPrint) {
     const options = { maxBuffer: 1024 * 1024 * 100 };
     const command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ${configFile} -f -t "a" --work-dir ./workdir`;
@@ -113,9 +116,21 @@ function startFuzzWithOffchainConfig(configFile, isPrint) {
     );
 }
 
-// TODO: start blaz service(create task, update taskResult)
-function startBlaz() {
-    //
+function getOffchainConfig(results) {
+    let offchainConfig = results.reduce((acc, item) => {
+        const deepClonedItem = JSON.parse(JSON.stringify(item.abi));
+        return { ...acc, ...deepClonedItem };
+    }, {});
+
+    for (const fileName in offchainConfig) {
+        for (const contractName in offchainConfig[fileName]) {
+            offchainConfig[fileName][contractName] = {
+                address: randomAddress(),
+                constructor_args: '0x',
+            };
+        }
+    }
+    return offchainConfig;
 }
 
 async function build_with_autodetect(
@@ -124,7 +139,7 @@ async function build_with_autodetect(
     compiler_version,
     autoStart,
     setupFile,
-    offchainConfig,
+    offchainConfigPath,
     isPrint,
     blaz
 ) {
@@ -138,24 +153,16 @@ async function build_with_autodetect(
         results = [results];
     }
 
+    if (blaz) {
+        await getAPIKey();
+    }
+
+    const generatedOffchainConfig = getOffchainConfig(results);
+
     if (!setupFile) {
-        let offchainConfig = results.reduce((acc, item) => {
-            const deepClonedItem = JSON.parse(JSON.stringify(item.abi));
-            return { ...acc, ...deepClonedItem };
-        }, {});
-
-        for (const fileName in offchainConfig) {
-            for (const contractName in offchainConfig[fileName]) {
-                offchainConfig[fileName][contractName] = {
-                    address: randomAddress(),
-                    constructor_args: '0x',
-                };
-            }
-        }
-
         fs.writeFileSync(
             'offchain_config.json',
-            JSON.stringify(offchainConfig, null, 4)
+            JSON.stringify(generatedOffchainConfig, null, 4)
         );
 
         console.log(
@@ -163,6 +170,26 @@ async function build_with_autodetect(
         );
     } else {
         startFuzzWithSetupFile(setupFile, isPrint);
+        if (blaz) {
+            const buildResultUrl = await uploadBuildResult('results.json');
+            await createOffchain(
+                buildResultUrl,
+                projectType,
+                generatedOffchainConfig,
+                setupFile
+            );
+        }
+    }
+
+    if (offchainConfigPath) {
+        const isExist = checkFileExists(offchainConfigPath);
+        if (!isExist) return;
+        startFuzzWithOffchainConfig(offchainConfigPath, isPrint);
+        if (blaz) {
+            const buildResultUrl = await uploadBuildResult('results.json');
+            const offchainConfig = fs.readFileSync(offchainConfigPath, 'utf8');
+            await createOffchain(buildResultUrl, projectType, offchainConfig);
+        }
     }
 
     fs.writeFileSync('results.json', JSON.stringify(results, null, 4));
@@ -194,8 +221,8 @@ async function build_with_autodetect(
         );
     }
 
-    // No setup file/offchain config
-    if (!setupFile && !offchainConfig) {
+    // No setup file/offchain config, select the mode of operation manually
+    if (!setupFile && !offchainConfigPath) {
         const { choice } = await inquirer.prompt({
             type: 'list',
             name: 'choice',
@@ -204,48 +231,81 @@ async function build_with_autodetect(
         });
 
         if (choice === 'Setup File') {
-            console.log('Setup File');
-            const { setup_file_path } = await inquirer.prompt([
-                {
-                    type: 'input',
-                    name: 'file_path',
-                    message: 'Input setup file:',
-                },
-            ]);
-            startFuzzWithSetupFile(setup_file_path, isPrint);
-        } else if (choice === 'Offchain Config') {
-            console.log('Offchain config');
-            const { file_path } = await inquirer.prompt([
-                {
-                    type: 'input',
-                    name: 'file_path',
-                    message:
-                        'Select the offchain config file, if no value is provided, the generated configuration will be selected:',
-                },
-            ]);
-
-            const offchainConfig = fs.readFileSync(
-                file_path || 'offchain_config.json',
-                'utf8'
+            // generate setup files and check that the input file path exists in the setup files
+            const setupFiles = results.flatMap((obj) =>
+                Object.entries(obj.ast).flatMap(([filePath, astObj]) =>
+                    astObj.contracts.map(
+                        (contract) => `${filePath}:${contract.name}`
+                    )
+                )
             );
+            const setupType = await inquirer.prompt([
+                {
+                    type: 'list',
+                    name: 'contract',
+                    message: 'Please select the below setup files to continue:',
+                    choices: [...setupFiles, 'customization'],
+                },
+                {
+                    type: 'input',
+                    name: 'customContract',
+                    message: 'Please input the setup file to continue:',
+                    when: (answers) => answers.contract === 'customization',
+                },
+            ]);
 
-            startFuzzWithOffchainConfig();
+            const inputSetupFileExist =
+                setupFiles.findIndex((f) => f === setupType.customContract) >
+                -1;
 
-            // TODO: need to upload contracts(results.json) for clone flow?
-            await createOffchain('', projectType, offchainConfig, 0);
+            if (setupType.customContract && !inputSetupFileExist) {
+                logger.error(
+                    'The setup file you input is not available, please check generated results.json file'
+                );
+                return;
+            }
+            const setupFile =
+                setupType.customContract || customContract.contract;
 
-            // TODO: copy faas fuzz_manager logic below, update status when task error or completed
-            // also save workdir results to TaskResult
-            function updateTaskResult() {
-                //
+            startFuzzWithSetupFile(setupFile, isPrint);
+
+            if (blaz) {
+                const buildResultUrl = await uploadBuildResult('results.json');
+                await createOffchain(
+                    buildResultUrl,
+                    projectType,
+                    generatedOffchainConfig,
+                    setupFile
+                );
+            }
+        } else if (choice === 'Offchain Config') {
+            const { offchain_cofig_path } = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'offchain_cofig_path',
+                    message:
+                        'Select the offchain config file, if no value is provided, the generated offchain_config.json file will be applied:',
+                },
+            ]);
+            const offchainConfigPath =
+                offchain_cofig_path || 'offchain_config.json';
+            const isExist = checkFileExists(offchainConfigPath);
+            if (!isExist) return;
+            startFuzzWithOffchainConfig(offchainConfigPath, isPrint);
+
+            if (blaz) {
+                const offchainConfig = fs.readFileSync(
+                    offchainConfigPath,
+                    'utf8'
+                );
+                const buildResultUrl = await uploadBuildResult('results.json');
+                await createOffchain(
+                    buildResultUrl,
+                    projectType,
+                    offchainConfig
+                );
             }
         }
-    }
-
-    // Run blaz services, create task
-    if (blaz) {
-        const API_KEY = await getAPIKey();
-        console.log('API_KEY', API_KEY);
     }
 }
 
@@ -297,7 +357,7 @@ const argv = yargs(hideBin(process.argv))
     .option('blaz', {
         alias: 'b',
         type: 'boolean',
-        description: 'Automatically run blaz services, create task',
+        description: 'Automatically run blaz services, create offchain task',
     })
     .option('setup-file', {
         alias: 'f',
@@ -320,6 +380,42 @@ const argv = yargs(hideBin(process.argv))
         'Configure CLI options, the values you provide will be written to file (~/.blazo)',
         async () => {
             await getAPIKey();
+        }
+    )
+    .command(
+        'create <type>',
+        'Create a project type',
+        (yargs) => {
+            yargs
+                .positional('type', {
+                    describe: 'Type of the project to create(onchain)',
+                    type: 'string',
+                    choices: ['onchain'],
+                })
+                .option('contract-address', {
+                    alias: 't',
+                    type: 'string',
+                    description: 'Contract address for onchain type',
+                })
+                .option('chain', {
+                    alias: 'c',
+                    type: 'string',
+                    description: 'Chain for onchain type (e.g., ETH)',
+                })
+                .option('onchain-block-number', {
+                    type: 'number',
+                    description: 'Block number for onchain type',
+                });
+        },
+        async (argv) => {
+            if (argv.type === 'onchain') {
+                await createOnchain(
+                    argv.type,
+                    argv.contractAddress,
+                    argv.chain,
+                    argv.onchainBlockNumber
+                );
+            }
         }
     )
     .help().argv;

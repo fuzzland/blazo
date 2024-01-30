@@ -253,6 +253,16 @@ async function getAPIKey() {
     return API_KEY;
 }
 
+function checkFileExists(filePath) {
+    const exists = fs.existsSync(filePath);
+    if (exists) {
+        return true;
+    } else {
+        logger.error(`${filePath} does not exist`);
+        return false;
+    }
+}
+
 module.exports = {
     randomAddress,
     deploy,
@@ -261,4 +271,5 @@ module.exports = {
     checkSolcSelectInstalled,
     logger,
     getAPIKey,
+    checkFileExists,
 };

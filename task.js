@@ -3,18 +3,20 @@ const path = require('path');
 const archiver = require('archiver');
 const axios = require('axios');
 const FormData = require('form-data');
-const { randomAddress, logger } = require('./utils');
+const { randomAddress, logger, getAPIKey } = require('./utils');
 const { auto_detect } = require('./builder');
 const { INVARIANTS_ITEMS } = require('./constant');
 
 const BLAZ_API_KEY = process.env.BLAZ_API_KEY;
 const BUILDER_BASE_URL = 'https://solc-builder.dev.infra.fuzz.land';
-const BLAZ_BASE_URL = 'https://blaz.dev.infra.fuzz.land';
+const BLAZ_BASE_URL =
+    'http://localhost:3000' || 'https://blaz.dev.infra.fuzz.land';
 
 async function createOffchain(
-    buildResult,
+    buildResultUrl,
     projectType,
     offchainConfig,
+    setupFile,
     status = 0
 ) {
     const invariants = Object.keys(INVARIANTS_ITEMS)
@@ -29,7 +31,7 @@ async function createOffchain(
                 project_type: projectType,
                 contracts_filename: '',
                 contract_address: '',
-                contracts: buildResult,
+                contracts: buildResultUrl,
                 offchain_config: JSON.stringify(JSON.parse(offchainConfig)),
                 chain: '',
                 custom_rpc_url: '',
@@ -41,6 +43,7 @@ async function createOffchain(
                 token_price: [],
                 status,
                 upload_type: 0,
+                setup_file: setupFile,
             },
             {
                 headers: {
@@ -242,7 +245,38 @@ async function createOnchain(contractAddress, chain, blockNumber) {
     }
 }
 
+async function getSignedUrl(filename) {
+    const {
+        data: { uploadUrl },
+    } = await axios.get(`${BLAZ_BASE_URL}/upload_url/${filename}`);
+    return uploadUrl;
+}
+
+async function uploadBuildResult(filePath) {
+    let buffer;
+    const API_KEY = await getAPIKey();
+    const {
+        data: { uploadUrl },
+    } = await axios.get(
+        `${BLAZ_BASE_URL}/storage/upload_url/${'test_config.json'}`,
+        {
+            headers: {
+                Authorization: API_KEY,
+            },
+        }
+    );
+    try {
+        buffer = fs.readFileSync(filePath, 'utf8');
+    } catch (err) {
+        logger.error('uploaded file not found');
+        return;
+    }
+    await axios.put(uploadUrl, buffer);
+    return uploadUrl;
+}
+
 module.exports = {
     createOffchain,
     createOnchain,
+    uploadBuildResult,
 };
