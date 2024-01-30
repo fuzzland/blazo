@@ -89,6 +89,7 @@ function executeCommand(command, options, onExit, isPrint) {
 function startFuzzWithSetupFile(setupFile, isPrint) {
     const options = { maxBuffer: 1024 * 1024 * 100 };
     const command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
+    console.log(command);
     executeCommand(
         command,
         options,
@@ -104,6 +105,7 @@ function startFuzzWithSetupFile(setupFile, isPrint) {
 function startFuzzWithOffchainConfig(configFile, isPrint) {
     const options = { maxBuffer: 1024 * 1024 * 100 };
     const command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ${configFile} -f -t "a" --work-dir ./workdir`;
+    console.log(command);
     executeCommand(
         command,
         options,
@@ -264,8 +266,7 @@ async function build_with_autodetect(
                 );
                 return;
             }
-            const setupFile =
-                setupType.customContract || customContract.contract;
+            const setupFile = setupType.customContract || setupType.contract;
 
             startFuzzWithSetupFile(setupFile, isPrint);
 
@@ -291,7 +292,6 @@ async function build_with_autodetect(
                 offchain_cofig_path || 'offchain_config.json';
             const isExist = checkFileExists(offchainConfigPath);
             if (!isExist) return;
-            startFuzzWithOffchainConfig(offchainConfigPath, isPrint);
 
             if (blaz) {
                 const offchainConfig = fs.readFileSync(
@@ -305,6 +305,7 @@ async function build_with_autodetect(
                     offchainConfig
                 );
             }
+            startFuzzWithOffchainConfig(offchainConfigPath, isPrint);
         }
     }
 }
