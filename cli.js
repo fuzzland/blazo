@@ -350,16 +350,16 @@ const argv = yargs(hideBin(process.argv))
         'configure',
         'Configure CLI options, the values you provide will be written to file (~/.blazo)',
         async () => {
-            await getAPIKey();
+            await getAPIKey(true);
         }
     )
     .command(
         'create <type>',
-        'Create a project type',
+        'Create a task type',
         (yargs) => {
             yargs
                 .positional('type', {
-                    describe: 'Type of the project to create(onchain)',
+                    describe: 'Type of the task to create(onchain)',
                     type: 'string',
                     choices: ['onchain'],
                 })

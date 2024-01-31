@@ -223,11 +223,13 @@ const logger = {
     },
 };
 
-async function getAPIKey() {
-    if (fs.existsSync(BLAZO_PATH)) {
-        const token = fs.readFileSync(BLAZO_PATH, 'utf-8').trim();
-        if (token) {
-            return token;
+async function getAPIKey(isReset = false) {
+    if (!isReset) {
+        if (fs.existsSync(BLAZO_PATH)) {
+            const token = fs.readFileSync(BLAZO_PATH, 'utf-8').trim();
+            if (token) {
+                return token;
+            }
         }
     }
 
