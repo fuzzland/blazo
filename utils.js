@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const chalk = require('chalk');
+const { BLAZO_PATH } = require('./constant');
+const inquirer = require('inquirer');
 
 async function deployContract(bytecode, port) {
     const deployData = JSON.stringify({
@@ -22,11 +24,15 @@ async function deployContract(bytecode, port) {
     });
 
     try {
-        const deployResponse = await axios.post(`http://localhost:${port}`, deployData, {
-            headers: {
-                'content-type': 'application/json',
-            },
-        });
+        const deployResponse = await axios.post(
+            `http://localhost:${port}`,
+            deployData,
+            {
+                headers: {
+                    'content-type': 'application/json',
+                },
+            }
+        );
 
         if (!deployResponse.data || !deployResponse.data.result) {
             console.log('Failed to deploy contract');
@@ -42,13 +48,21 @@ async function deployContract(bytecode, port) {
             params: [txHash],
         });
 
-        const traceResponse = await axios.post(`http://localhost:${port}`, traceData, {
-            headers: {
-                'content-type': 'application/json',
-            },
-        });
+        const traceResponse = await axios.post(
+            `http://localhost:${port}`,
+            traceData,
+            {
+                headers: {
+                    'content-type': 'application/json',
+                },
+            }
+        );
 
-        if (!traceResponse.data || !traceResponse.data.result || traceResponse.data.result.length === 0) {
+        if (
+            !traceResponse.data ||
+            !traceResponse.data.result ||
+            traceResponse.data.result.length === 0
+        ) {
             console.log('Failed to trace transaction');
             return [];
         }
@@ -68,7 +82,10 @@ async function deploy(data, offchainConfig) {
         const contracts = data[i].bytecode;
         for (const fileName in contracts) {
             for (const contractName in contracts[fileName]) {
-                if (offchainConfig.hasOwnProperty(fileName) && offchainConfig[fileName].hasOwnProperty(contractName)) {
+                if (
+                    offchainConfig.hasOwnProperty(fileName) &&
+                    offchainConfig[fileName].hasOwnProperty(contractName)
+                ) {
                     const bytecode = contracts[fileName][contractName];
                     const results = await deployContract(bytecode, port);
                     if (!results || results.length === 0) {
@@ -103,13 +120,18 @@ async function deploy(data, offchainConfig) {
                         code = code.slice(2);
                     }
 
-                    const lengthDifference = Math.abs(bytecode.length - code.length);
+                    const lengthDifference = Math.abs(
+                        bytecode.length - code.length
+                    );
                     const maxLength = Math.max(bytecode.length, code.length);
                     if (lengthDifference / maxLength <= 0.1) {
                         const bytecodeBuffer = Buffer.from(bytecode, 'hex');
                         const codeBuffer = Buffer.from(code, 'hex');
 
-                        const targetLength = Math.max(bytecodeBuffer.length, codeBuffer.length);
+                        const targetLength = Math.max(
+                            bytecodeBuffer.length,
+                            codeBuffer.length
+                        );
 
                         let paddedBytecodeBuffer = bytecodeBuffer;
                         let paddedCodeBuffer = codeBuffer;
@@ -117,7 +139,9 @@ async function deploy(data, offchainConfig) {
                         if (bytecodeBuffer.length < targetLength) {
                             paddedBytecodeBuffer = Buffer.concat([
                                 bytecodeBuffer,
-                                Buffer.alloc(targetLength - bytecodeBuffer.length),
+                                Buffer.alloc(
+                                    targetLength - bytecodeBuffer.length
+                                ),
                             ]);
                         }
                         if (codeBuffer.length < targetLength) {
@@ -127,7 +151,10 @@ async function deploy(data, offchainConfig) {
                             ]);
                         }
 
-                        const distance = compare(paddedBytecodeBuffer, paddedCodeBuffer);
+                        const distance = compare(
+                            paddedBytecodeBuffer,
+                            paddedCodeBuffer
+                        );
                         if (distance !== null && distance < minDistance) {
                             minDistance = distance;
                             closestBytecodeAddress = bytecodeAddress;
@@ -142,7 +169,8 @@ async function deploy(data, offchainConfig) {
                     if (!data[i]['address'].hasOwnProperty(fileName)) {
                         data[i]['address'][fileName] = {};
                     }
-                    data[i]['address'][fileName][contractName] = closestBytecodeAddress.address;
+                    data[i]['address'][fileName][contractName] =
+                        closestBytecodeAddress.address;
                 }
             }
         }
@@ -195,6 +223,48 @@ const logger = {
     },
 };
 
+async function getAPIKey(isReset = false) {
+    if (!isReset) {
+        if (fs.existsSync(BLAZO_PATH)) {
+            const token = fs.readFileSync(BLAZO_PATH, 'utf-8').trim();
+            if (token) {
+                return token;
+            }
+        }
+    }
+
+    logger.info('===============================================');
+    logger.info(
+        "You're not logged in. To interact with the Blaz service, you need to be authenticated."
+    );
+    logger.info('Please provide your login credentials below.');
+    logger.info(
+        "If you don't have an account, you can register at https://blaz.ai, and get the API key at https://blaz.ai/account/apikeys."
+    );
+    logger.info('===============================================');
+
+    const data = await inquirer.prompt([
+        {
+            type: 'input',
+            name: 'API_KEY',
+            message: 'Input API Key:',
+        },
+    ]);
+    const API_KEY = data['API_KEY'];
+    fs.writeFileSync(BLAZO_PATH, API_KEY);
+    return API_KEY;
+}
+
+function checkFileExists(filePath) {
+    const exists = fs.existsSync(filePath);
+    if (exists) {
+        return true;
+    } else {
+        logger.error(`${filePath} does not exist`);
+        return false;
+    }
+}
+
 module.exports = {
     randomAddress,
     deploy,
@@ -202,4 +272,6 @@ module.exports = {
     hasPnpm,
     checkSolcSelectInstalled,
     logger,
+    getAPIKey,
+    checkFileExists,
 };
