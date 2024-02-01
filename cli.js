@@ -353,40 +353,4 @@ const argv = yargs(hideBin(process.argv))
             await getAPIKey(true);
         }
     )
-    .command(
-        'create <type>',
-        'Create a task type',
-        (yargs) => {
-            yargs
-                .positional('type', {
-                    describe: 'Type of the task to create(onchain)',
-                    type: 'string',
-                    choices: ['onchain'],
-                })
-                .option('contract-address', {
-                    alias: 't',
-                    type: 'string',
-                    description: 'Contract address for onchain type',
-                })
-                .option('chain', {
-                    alias: 'c',
-                    type: 'string',
-                    description: 'Chain for onchain type (e.g., ETH)',
-                })
-                .option('onchain-block-number', {
-                    type: 'number',
-                    description: 'Block number for onchain type',
-                });
-        },
-        async (argv) => {
-            if (argv.type === 'onchain') {
-                await createOnchain(
-                    argv.type,
-                    argv.contractAddress,
-                    argv.chain,
-                    argv.onchainBlockNumber
-                );
-            }
-        }
-    )
     .help().argv;
