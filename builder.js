@@ -34,10 +34,21 @@ async function build(project, task_dir, compiler_version) {
         });
         return await promise;
     } else if (project === 'forge') {
-        let promise = new Promise((resolve, reject) => {
-            handle_build_info_task(task_dir, forge_build_json, resolve);
-        });
-        return await promise;
+        let { success, contents } = await forge_build_json(task_dir);
+        if (!success) {
+            console.error('Build failed...');
+            exit(1);
+        }
+        let results = [];
+        for (let content of contents) {
+            let result = await handleBuildResult(content["output"], compiler_version, content["input"], null, process.hrtime());
+            results.push({
+                success: true,
+                ...result,
+            });
+        }
+
+        return results;
     } else if (project === 'solidity_folder') {
         let promise = new Promise((resolve, reject) => {
             if (!compiler_version) {
@@ -79,6 +90,10 @@ async function handle_multi_build(task_dir, compiler_version, resolve) {
     let build_sources = {};
 
     for (let file of files) {
+        let is_dir = fs.lstatSync(file).isDirectory();
+        if (is_dir) {
+            continue;
+        }
         let content = fs.readFileSync(file, 'utf8');
         build_sources[file] = { content };
     }
@@ -238,13 +253,8 @@ async function handleBuildResult(output, compiler_version, compiler_json, contra
         };
     }
 
-    let compiler_args = null;
-    compiler_args = {
-        version: compiler_version,
-        compiler_json,
-    };
 
-    return { ast, sourcemap, sources, bytecode, runtime_bytecode, abi, invariants, compiler_args };
+    return { ast, sourcemap, sources, bytecode, runtime_bytecode, abi, invariants };
 }
 
 async function work_on_json(compiler_version, compiler_json, contract_name) {
