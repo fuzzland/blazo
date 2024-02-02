@@ -42,6 +42,7 @@ EXAMPLES
   $ blazo ./ -s
   $ blazo . --setup-file test/A.t.sol:InvariantExample1
   $ blazo . --offchain-config offchain-config.json
+  $ blazo . -- --flashloan # Append more parameters to Ityfuzz after "--".
 ```
 
 ```

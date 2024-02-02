@@ -10,6 +10,7 @@ const {
     getAPIKey,
     logger,
     checkFileExists,
+    getAdditionalItyfuzzArgs,
 } = require('./utils');
 const { handleBuildCoverage } = require('./coverage');
 const { createOffchain, createOnchain, uploadBuildResult } = require('./task');
@@ -87,11 +88,15 @@ function executeCommand(command, options, onExit, isPrint) {
 }
 
 function startFuzz(setupFile, configFile, isPrint) {
+    const additionalArgs = getAdditionalItyfuzzArgs();
     let command = '';
     if (setupFile) {
         command = `ityfuzz evm --builder-artifacts-file ./results.json -t "a" --work-dir ./workdir --setup-file ${setupFile}`;
     } else {
         command = `ityfuzz evm --builder-artifacts-file ./results.json --offchain-config-file ${configFile} -f -t "a" --work-dir ./workdir`;
+    }
+    if (additionalArgs) {
+        command += ` ${additionalArgs}`;
     }
     console.log(`Starting ityfuzz with command: ${command}`);
     handleBuildCoverage();
@@ -344,7 +349,7 @@ const argv = yargs(hideBin(process.argv))
         alias: 'p',
         type: 'boolean',
         description: 'Print the output in real-time if true',
-        default: false,
+        default: true,
     })
     .command(
         'configure',

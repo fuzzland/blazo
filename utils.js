@@ -265,6 +265,15 @@ function checkFileExists(filePath) {
     }
 }
 
+function getAdditionalItyfuzzArgs() {
+    const args = process.argv.slice(2);
+    const separatorIndex = args.indexOf('--');
+    if (separatorIndex !== -1 && separatorIndex < args.length - 1) {
+        const additionalArgs = args.slice(separatorIndex + 1);
+        return additionalArgs.join(' ');
+    }
+}
+
 module.exports = {
     randomAddress,
     deploy,
@@ -274,4 +283,5 @@ module.exports = {
     logger,
     getAPIKey,
     checkFileExists,
+    getAdditionalItyfuzzArgs,
 };
