@@ -6,48 +6,46 @@ const fs = require('fs');
 async function forge_build_json(project_dir) {
     let task_dir = path.join(project_dir, `build-info-${uuidv4()}`);
     let cmd = `forge build --build-info --build-info-path ${task_dir} --force --optimizer-runs 1000`;
-    let promise = new Promise((resolve, reject) => {
-        try {
-            console.log("Running forge build", cmd);
-            let process = exec(`cd ${project_dir} && ` + cmd);
-            process.stdout.on('data', (data) => {
-                console.info(data.toString());
-            });
 
-            process.stderr.on('data', (data) => {
-                console.log(data.toString());
-            });
+    let promise = new Promise((resolve) => {
+        console.log("Running forge build", cmd);
+        let process = exec(`cd ${project_dir} && ` + cmd);
 
-            process.on('exit', (code) => {
-                if (!fs.existsSync(task_dir)) {
-                    resolve({
-                        success: false,
-                        err: "Build info not found"
-                    });
-                    return;
-                }
-                let files = fs.readdirSync(task_dir);
-                let contents = [];
-                for (let file of files) {
-                    if (!file.endsWith('.json')) {
-                        continue;
-                    }
-                    let fp = path.join(task_dir, file);
-                    let content = fs.readFileSync(fp, 'utf8');
-                    content = JSON.parse(content);
-                    contents.push(content);
-                }
+        let stderrData = '';
+
+        process.stdout.on('data', (data) => {
+            console.info(data.toString());
+        });
+
+        process.stderr.on('data', (data) => {
+            console.error(data.toString());
+            stderrData += data.toString();
+        });
+
+        process.on('exit', (code) => {
+            if (code !== 0 || !fs.existsSync(task_dir)) {
                 resolve({
-                    success: true,
-                    contents
+                    success: false,
+                    contents: stderrData || "Build info not found or build failed"
                 });
-            });
-        } catch (err) {
+                return;
+            }
+            let files = fs.readdirSync(task_dir);
+            let contents = [];
+            for (let file of files) {
+                if (!file.endsWith('.json')) {
+                    continue;
+                }
+                let fp = path.join(task_dir, file);
+                let content = fs.readFileSync(fp, 'utf8');
+                content = JSON.parse(content);
+                contents.push(content);
+            }
             resolve({
-                success: false,
-                err: err.stderr.toString()
+                success: true,
+                contents
             });
-        }
+        });
     });
 
     return await promise;

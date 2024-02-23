@@ -14,6 +14,17 @@ const {
 const { handleBuildCoverage } = require('./coverage');
 const { createOffchain, createOnchain, uploadBuildResult } = require('./task');
 const inquirer = require('inquirer');
+const {
+    ASTReader,
+    ASTWriter, CompileFailedError,
+    compileSol,
+    DefaultASTWriterMapping,
+    LatestCompilerVersion,
+    PrettyFormatter, compileJson
+} = require("solc-typed-ast")
+const { compileJsonData } = require("solc-typed-ast");
+const OpenAI = require('openai');
+const { forge_build_json } = require('./foundry');
 
 function visualize(results) {
     let data = [['File', 'Contract Name', 'Functions Can Get Fuzzed']];
@@ -126,6 +137,82 @@ function getOffchainConfig(results) {
     return offchainConfig;
 }
 
+async function findContractSetupCode(functions) {
+    for (const func of functions) {
+        if (func.name === 'setup') {
+            return func.source;
+        }
+    }
+    return "";
+}
+
+async function callOpenAI(functionSource, setupCode, errorMsg = "") {
+    const openai = new OpenAI();
+    let prompt = `You are given some smart contract functions. The functions are defined as follows:\n\`\`\`solidity\n${functionSource}\n\`\`\`\n\nNow, please finish the following property test case for these function. The setUp() function is already provided for you, you can add state variables and other functions as needed. \n\`\`\`solidity\ncontract TestContract {\n${setupCode}\n`;
+    if (errorMsg) {
+        prompt += `Please avoid the following error: ${errorMsg}\n`;
+    }
+
+    try {
+        const response = await openai.chat.completions.create({
+            model: "ft:gpt-3.5-turbo-1106:fuzzland::8ucaLWeG",
+            messages: [{
+                "role": "system",
+                "content": prompt
+            }],
+            temperature: 1,
+            max_tokens: 256,
+            top_p: 1,
+            frequency_penalty: 0,
+            presence_penalty: 0
+        });
+
+        return response.choices[0].message.content.trim();
+    } catch (error) {
+        console.error('Error calling OpenAI:', error);
+        return "";
+    }
+}
+
+async function generateTestCasesForFunction(functionName, setupCode, functionSource, project) {
+    let errorMsg = "";
+    const filename = `${functionName}.t.sol`;
+    for (let i = 0; i < 3; i++) {
+        try {
+            const testCode = await callOpenAI(setupCode, functionSource, errorMsg);
+            const fullCode = `contract TestContract {\n${setupCode}\n${testCode}\n`.replace("```", "");
+            fs.writeFileSync(`${project}/tests/${filename}`, fullCode);
+            let { success, contents } = await forge_build_json(project);
+            if (success) {
+                return;
+            }
+            errorMsg = contents;
+            fs.unlinkSync(`${project}/tests/${filename}`);
+        } catch (error) {
+            console.error('Error building project:', error);
+        }
+    }
+    return testCode;
+}
+
+async function generateTestCasesForContract(contracts, contractName, project) {
+    const functions = contracts[0].ast[contractName].contracts[0].functions;
+    const setupCode = await findContractSetupCode(functions, project);
+    if (!setupCode) {
+        console.log(`Setup function not found for contract ${contractName}`);
+    }
+
+    for (const func of functions) {
+        if (func.name.toLowerCase() !== 'setup') {
+            await generateTestCasesForFunction(func.name, setupCode, func.source, project);
+        }
+    }
+}
+
+async function gen_test(results, project) {
+    await generateTestCasesForContract(results, "contracts/MapleLoan.sol", project);
+}
+
 async function build_with_autodetect(
     project,
     projectType,
@@ -188,6 +275,8 @@ async function build_with_autodetect(
     fs.writeFileSync('results.json', JSON.stringify(results, null, 4));
     visualize(results);
     console.log(`Results written to results.json`);
+
+    await gen_test(results, project);
 
     if (autoStart) {
         startFuzz(setupFile, 'offchain_config.json', isPrint);
